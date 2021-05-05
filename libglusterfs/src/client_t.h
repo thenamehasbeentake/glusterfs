@@ -23,12 +23,16 @@ struct client_ctx {
 typedef struct _client {
         struct {
                 /* e.g. protocol/server stashes its ctx here */
+                // 协议/服务器将其ctx存储在此处
                 gf_lock_t            lock;
                 unsigned short       count;
                 struct client_ctx   *ctx;
         }            scratch_ctx;
+                // 暂存ctx
+
         gf_atomic_t                  bind;
         gf_atomic_t                  count;
+        // 这个bound_xl不太懂什么意思
         xlator_t    *bound_xl;
         xlator_t    *this;
         int          tbl_index;

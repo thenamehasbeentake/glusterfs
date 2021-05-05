@@ -325,6 +325,22 @@ typedef struct _server_cmdline server_cmdline_t;
 #define GF_OPTION_DISABLE  _gf_false
 #define GF_OPTION_DEFERRED 2
 
+/*
+基本选项
+备份的卷文件服务，包括原始的(mount -t glusterfs 的时候可以制定多个server的ip或者hostname)
+高级选项：端口号，debug模式，worm，超时等等，fsd 的参数
+进程时间片轮转
+xlator选项列表
+fuse的一些选项：超时设置，nfs，内存访问，pid等
+关键参数：挂载点，卷id
+postmap支持的选项
+SSL？
+oom调整
+valgrind支持
+套娃挂载
+事件的历史
+*/
+
 struct _cmd_args {
         /* basic options */
         char              *volfile_server;
@@ -386,8 +402,10 @@ struct _cmd_args {
         int                client_pid_set;
         unsigned           uid_map_root;
         int                background_qlen;
+        // 拥塞阈值
         int                congestion_threshold;
         char              *fuse_mountopts;
+        // 内存访问
         int                mem_acct;
         int                resolve_gids;
 
@@ -456,7 +474,9 @@ struct gf_ctx_tw {
 };
 
 struct _glusterfs_ctx {
+        // 命令行的一些参数
         cmd_args_t         cmd_args;
+
         char              *process_uuid;
         FILE              *pidfp;
         char               fin;
@@ -472,6 +492,7 @@ struct _glusterfs_ctx {
         /* one per volfile parse */
         struct list_head   graphs;
 
+        //配置文件里面的
         /* the latest graph in use */
         glusterfs_graph_t *active;
 
@@ -482,9 +503,11 @@ struct _glusterfs_ctx {
         void              *mgmt;
 
         /* listener of the commands from glusterd */
+        // 标记一下
         void              *listener;
 
         /* toggle switch for latency measurement */
+        // 拨动开关，用于延迟测量
         unsigned char      measure_latency;
         pthread_t          sigwaiter;
         char              *cmdlinestr;
@@ -493,9 +516,13 @@ struct _glusterfs_ctx {
         int                graph_id; /* Incremented per graph, value should
                                         indicate how many times the graph has
                                         got changed */
+                                        // 每个图的增量，值应指示该图已更改了多少次
         pid_t              mnt_pid; /* pid of the mount agent */
+        // 挂载代理程序的pid
         int                process_mode; /*mode in which process is runninng*/
+        // 运行过程的模式
         struct syncenv    *env;          /* The env pointer to the synctasks */
+        // 指向synctasks的env指针
 
 #if defined(OLD_MEM_POOLS)
         struct list_head   mempool_list; /* used to keep a global list of
@@ -510,12 +537,15 @@ struct _glusterfs_ctx {
 
         glusterfsd_mgmt_event_notify_fn_t notify; /* Used for xlators to make
                                                      call to fsd-mgmt */
+                                                //      用于xlator调用fsd-mgmt
         gf_log_handle_t    log; /* all logging related variables */
+// 所有与日志记录相关的变量
 
         int                mem_acct_enable;
 
         int                daemon_pipe[2];
 
+// client table, first_free??这个free不太懂
         struct clienttable *clienttable;
 
         /*
@@ -527,6 +557,7 @@ struct _glusterfs_ctx {
          * any sense, but it's not worth turning the codebase upside-down to
          * fix it.  Thus, an int.
          */
+        // gf_boolean_t定义写在common-utils.h文件里面，这个头文件在它之前，只能int了
         int                secure_mgmt;
 
         /*
@@ -535,8 +566,12 @@ struct _glusterfs_ctx {
          * and SSL is set on the I/O path.  It should never be set e.g. for
          * NFS.
          */
+        // server/inbound 使用ssl与否，只会在glusterd进程并且secure_mgmt设置才有效
+        // 或者fsd并且SSL设置在I/O路径上
+        // nfs将不会被设置
         mgmt_ssl_t         secure_srvr;
         /* Buffer to 'save' backtrace even under OOM-kill like situations*/
+        // 即使在类似OOM的情况下，也可以“保存”回溯的缓冲区
         char               btbuf[GF_BACKTRACE_LEN];
 
         pthread_mutex_t    notify_lock;
@@ -544,6 +579,7 @@ struct _glusterfs_ctx {
         int                notifying;
 
         struct gf_ctx_tw  *tw; /* refcounted timer_wheel */
+        // 计时
 
         gf_lock_t          volfile_lock;
 
