@@ -862,6 +862,7 @@ gf_client_dump_inodes_to_dict (xlator_t *this, dict_t *dict)
                             clienttable->cliententries[count].next_free)
                                 continue;
                         client = clienttable->cliententries[count].client;
+                        // client->bound_xl->name，  client->bound_xl
                         if (!strcmp (client->bound_xl->name, this->name)) {
                                 memset(key, 0, sizeof (key));
                                 if (client->bound_xl && client->bound_xl->

@@ -33,6 +33,7 @@ struct dict_cmp {
         gf_boolean_t (*value_ignore) (char *k);
 };
 
+// 分配dict的data内存
 data_t *
 get_new_data ()
 {
@@ -47,6 +48,7 @@ get_new_data ()
         return data;
 }
 
+// 分配dict的dict*内存， dict->members， size_hint为hash size大小
 dict_t *
 get_new_dict_full (int size_hint)
 {
@@ -57,6 +59,7 @@ get_new_dict_full (int size_hint)
         }
 
         dict->hash_size = size_hint;
+        // size_hit为1， dict->members = &dict->members_internal，指向内部
         if (size_hint == 1) {
                 /*
                  * This is the only case we ever see currently.  If we ever
@@ -78,6 +81,7 @@ get_new_dict_full (int size_hint)
                  */
                 GF_ASSERT (size_hint <=
                            (sizeof(data_pair_t) / sizeof(data_pair_t *)));
+                // 小于等于5（6？），malloc内存，指向新的地方
                 dict->members = mem_get0 (THIS->ctx->dict_pair_pool);
                 if (!dict->members) {
                         mem_put (dict);
@@ -90,12 +94,14 @@ get_new_dict_full (int size_hint)
         return dict;
 }
 
+// 初始化dict*， 并为其中的members赋值
 dict_t *
 get_new_dict (void)
 {
         return get_new_dict_full (1);
 }
 
+// 初始化dict*， 并为其中的members赋值
 dict_t *
 dict_new (void)
 {
@@ -109,6 +115,7 @@ dict_new (void)
         return dict;
 }
 
+// 判断data_t是否相等
 int32_t
 is_data_equal (data_t *one,
                data_t *two)
@@ -136,6 +143,8 @@ is_data_equal (data_t *one,
         return 0;
 }
 
+// 比较两个dict之间的key 是否 相同
+// data是dict+igore函数
 static int
 key_value_cmp (dict_t *one, char *key1, data_t *value1, void *data)
 {
@@ -172,6 +181,7 @@ key_value_cmp (dict_t *one, char *key1, data_t *value1, void *data)
  * which must be present in both the dictionaries but the value could be
  * different.
  */
+
 gf_boolean_t
 are_dicts_equal (dict_t *one, dict_t *two,
                  gf_boolean_t (*match) (dict_t *d, char *k, data_t *v,
