@@ -145,6 +145,7 @@ is_data_equal (data_t *one,
 
 // 比较两个dict之间的key 是否 相同
 // data是dict+igore函数
+// one的kv是否在data中出现过，且相等
 static int
 key_value_cmp (dict_t *one, char *key1, data_t *value1, void *data)
 {
@@ -181,7 +182,11 @@ key_value_cmp (dict_t *one, char *key1, data_t *value1, void *data)
  * which must be present in both the dictionaries but the value could be
  * different.
  */
-
+// 俩dict，比较函数，忽略值
+// 如果俩dict都为空，相等
+// 如果一个dict为空，非空dict里的key全为ignore值，相等
+// 如果俩都非空，取出每一个非ignore的值，进行比较
+// value_ignore函数用来跳过比较一些值，这样的值需要有同样的key但是不同的value
 gf_boolean_t
 are_dicts_equal (dict_t *one, dict_t *two,
                  gf_boolean_t (*match) (dict_t *d, char *k, data_t *v,
@@ -206,15 +211,21 @@ are_dicts_equal (dict_t *one, dict_t *two,
 
         cmp.dict = two;
         cmp.value_ignore = value_ignore;
+        // O(n^2)复杂度看起来不太行啊
+        // num_matches1为one能在two中匹配的kv数
         num_matches1 = dict_foreach_match (one, match, NULL, key_value_cmp,
                                            &cmp);
 
         if (num_matches1 == -1)
                 return _gf_false;
 
+        // one中key在two中均有发现，无ignore（对于ignore的k无需比较认为比较成功）。
+        // 全匹配
+        //
         if ((num_matches1 == one->count) && (one->count == two->count))
                 return _gf_true;
 
+        // 计数two字典中的kv对
         num_matches2 = dict_foreach_match (two, match, NULL,
                                            dict_null_foreach_fn, NULL);
 done:
@@ -233,15 +244,18 @@ data_destroy (data_t *data)
         if (data) {
                 LOCK_DESTROY (&data->lock);
 
+                // 仿照class中的static,非static释放data？？
                 if (!data->is_static)
                         GF_FREE (data->data);
 
                 data->len = 0xbabababa;
+                // 非const 归还内存？？
                 if (!data->is_const)
                         mem_put (data);
         }
 }
 
+// 内存池获取newdata资源，malloc data再memcpy，initlock
 data_t *
 data_copy (data_t *old)
 {
@@ -259,6 +273,7 @@ data_copy (data_t *old)
         if (old) {
                 newdata->len = old->len;
                 if (old->data) {
+                        // new and memcpy
                         newdata->data = memdup (old->data, old->len);
                         if (!newdata->data)
                                 goto err_out;
@@ -274,6 +289,7 @@ err_out:
         return NULL;
 }
 
+// dict的member中的hash size，拉链， look_up 比较paire_>key和key_hash
 static data_pair_t *
 dict_lookup_common (dict_t *this, char *key, uint32_t hash)
 {
@@ -292,7 +308,7 @@ dict_lookup_common (dict_t *this, char *key, uint32_t hash)
          */
         if (this->hash_size != 1)
                 hashval = hash % this->hash_size;
-
+        // 拉链？
         for (pair = this->members[hashval]; pair != NULL; pair = pair->hash_next) {
                 if (pair->key && (hash == pair->key_hash) &&
                     !strcmp (pair->key, key))
@@ -302,6 +318,7 @@ dict_lookup_common (dict_t *this, char *key, uint32_t hash)
         return NULL;
 }
 
+// 对key做SuperFastHash， 剩下dict_lookup_common
 int32_t
 dict_lookup (dict_t *this, char *key, data_t **data)
 {
@@ -1269,6 +1286,8 @@ dict_foreach (dict_t *dict,
     0 = no matches found,
    +n = n number of matches
 */
+// 将dict中的key value取出，与match data进行match函数比较，比较正确do action
+// action失败直接范围 action失败的返回值
 int
 dict_foreach_match (dict_t *dict,
              gf_boolean_t (*match)(dict_t *this,
