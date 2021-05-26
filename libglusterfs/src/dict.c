@@ -290,6 +290,7 @@ err_out:
 }
 
 // dict的member中的hash size，拉链， look_up 比较paire_>key和key_hash
+// hash位key 计算fasthash得到的值
 static data_pair_t *
 dict_lookup_common (dict_t *this, char *key, uint32_t hash)
 {
