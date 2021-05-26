@@ -63,16 +63,16 @@ typedef struct _data_pair data_pair_t;
 struct _data {
         unsigned char  is_static:1;
         unsigned char  is_const:1;
-        int32_t        len;
+        int32_t        len;             // strlen(data)+1
         char          *data;
         int32_t        refcount;
         gf_lock_t      lock;
 };
 
 struct _data_pair {
-        struct _data_pair *hash_next;
-        struct _data_pair *prev;
-        struct _data_pair *next;
+        struct _data_pair *hash_next;           // 在dict中防止hash冲突的，hash_next
+        struct _data_pair *prev;                // 双向列表，前一个
+        struct _data_pair *next;                // 双向列表，后一个
         data_t            *value;
         char              *key;
         uint32_t           key_hash;
@@ -81,7 +81,7 @@ struct _data_pair {
 struct _dict {
         unsigned char   is_static:1;
         int32_t         hash_size;
-        int32_t         count;
+        int32_t         count;          // key_count
         int32_t         refcount;
         data_pair_t   **members;
         data_pair_t    *members_list;

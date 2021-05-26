@@ -290,6 +290,7 @@ err_out:
 }
 
 // dict的member中的hash size，拉链， look_up 比较paire_>key和key_hash
+// hash位key 计算fasthash得到的值
 static data_pair_t *
 dict_lookup_common (dict_t *this, char *key, uint32_t hash)
 {
@@ -347,6 +348,7 @@ dict_lookup (dict_t *this, char *key, data_t **data)
         return 0;
 }
 
+// 回来看
 static int32_t
 dict_set_lk (dict_t *this, char *key, data_t *value, gf_boolean_t replace)
 {
@@ -357,6 +359,8 @@ dict_set_lk (dict_t *this, char *key, data_t *value, gf_boolean_t replace)
         uint32_t hash = 0;
 
         if (!key) {
+                // key = malloc(),???
+                // key = str(ref:&value)
                 ret = gf_asprintf (&key, "ref:%p", value);
                 if (-1 == ret) {
                         return -1;
@@ -373,6 +377,9 @@ dict_set_lk (dict_t *this, char *key, data_t *value, gf_boolean_t replace)
         }
 
         /* Search for a existing key if 'replace' is asked for */
+        // replace is true
+        // 查找hash，
+        // 找到后，拷贝value给key，释放原来的value
         if (replace) {
                 pair = dict_lookup_common (this, key, hash);
 
@@ -440,6 +447,7 @@ dict_set_lk (dict_t *this, char *key, data_t *value, gf_boolean_t replace)
         return 0;
 }
 
+// lock后dict_set_lk，replace=true
 int32_t
 dict_set (dict_t *this,
           char *key,
@@ -463,7 +471,7 @@ dict_set (dict_t *this,
         return ret;
 }
 
-
+// lock后dict_set_lk， replace=false
 int32_t
 dict_add (dict_t *this, char *key, data_t *value)
 {
@@ -486,6 +494,8 @@ dict_add (dict_t *this, char *key, data_t *value)
 }
 
 
+// 根据key计算hash，再根据key和hash去dict中lookup
+// dict_lookup_common，从member[hash%size]开始，遍历pair->next,匹配hash及key值，知道找到或者找不到
 data_t *
 dict_get (dict_t *this, char *key)
 {
@@ -513,6 +523,7 @@ dict_get (dict_t *this, char *key)
         return NULL;
 }
 
+// dict_t.count
 int
 dict_key_count (dict_t *this)
 {
@@ -533,6 +544,7 @@ dict_key_count (dict_t *this)
         return ret;
 }
 
+// 删除hash
 void
 dict_del (dict_t *this, char *key)
 {
@@ -550,22 +562,27 @@ dict_del (dict_t *this, char *key)
         /* If the divisor is 1, the modulo is always 0,
          * in such case avoid hash calculation.
          */
+        // 找到key的hash值
         hash = SuperFastHash (key, strlen (key));
         if (this->hash_size != 1)
                 hashval = hash % this->hash_size;
 
         data_pair_t *pair = this->members[hashval];
-        data_pair_t *prev = NULL;
+        data_pair_t *prev = NULL;       // 保存上一个data_pair_t相对于hash_next的上一个
 
         while (pair) {
+                // 判断当前的pair是否是要删除的
                 if ((hash == pair->key_hash) && strcmp (pair->key, key) == 0) {
+                        // hash_next 链表中间删节点
                         if (prev)
                                 prev->hash_next = pair->hash_next;
                         else
+                        // hash_next 链表头删节点， 头指向下一个
                                 this->members[hashval] = pair->hash_next;
 
                         data_unref (pair->value);
 
+                        // data_pair_t双向链表 中删除当前结点
                         if (pair->prev)
                                 pair->prev->next = pair->next;
                         else
@@ -574,17 +591,21 @@ dict_del (dict_t *this, char *key)
                         if (pair->next)
                                 pair->next->prev = pair->prev;
 
+                        // 释放当前pair的key
                         GF_FREE (pair->key);
+                        // 如果pair用的是字典中的free_pair，则释放该要用，以供后续其他pair使用
                         if (pair == &this->free_pair) {
                                 this->free_pair_in_use = _gf_false;
                         }
                         else {
+                                // 否则将内存归还内存池
                                 mem_put (pair);
                         }
+                        // key_count -1
                         this->count--;
                         break;
                 }
-
+                // 向后遍历
                 prev = pair;
                 pair = pair->hash_next;
         }
@@ -613,25 +634,35 @@ dict_destroy (dict_t *this)
 
         while (prev) {
                 pair = pair->next;
+                // 将上一个的member的值-1
                 data_unref (prev->value);
+                // 释放prev的key内存
                 GF_FREE (prev->key);
+                // 如果不是free_pair ，将内存放回内存池
                 if (prev != &this->free_pair) {
                         mem_put (prev);
                 }
+                // 总释放的pair+1
                 total_pairs++;
+                // 遍历下一个
                 prev = pair;
         }
 
+        // 如果this->members不是内部的member，内存回收
+        // members_internal？？？
         if (this->members != &this->members_internal) {
                 mem_put (this->members);
         }
-
+        // extra_free，内存池free
         GF_FREE (this->extra_free);
+        // extra_stdfree， 标准库free
         free (this->extra_stdfree);
 
         /* update 'ctx->stats.dict.details' using max_count */
+        // 使用max_count更新 ctx->stats.dict.details
         ctx = THIS->ctx;
 
+        // 并不是完全的竞争证明
         /* NOTE: below logic is not totaly race proof */
         /* thread0 and thread1 gets current_max as 10 */
         /* thread0 has 'this->max_count as 11 */
@@ -643,8 +674,9 @@ dict_destroy (dict_t *this)
         current_max = GF_ATOMIC_GET (ctx->stats.max_dict_pairs);
         if (current_max < this->max_count)
                 GF_ATOMIC_INIT (ctx->stats.max_dict_pairs, this->max_count);
-
+        // + total_pairs
         GF_ATOMIC_ADD (ctx->stats.total_pairs_used, total_pairs);
+        // +1
         GF_ATOMIC_INC (ctx->stats.total_dicts_used);
 
         if (!this->is_static)
@@ -653,6 +685,7 @@ dict_destroy (dict_t *this)
         return;
 }
 
+// refcount--, 如果refcount==0， 销毁dict_t
 void
 dict_unref (dict_t *this)
 {
@@ -675,6 +708,7 @@ dict_unref (dict_t *this)
                 dict_destroy (this);
 }
 
+//  refcount++
 dict_t *
 dict_ref (dict_t *this)
 {
@@ -693,6 +727,7 @@ dict_ref (dict_t *this)
         return this;
 }
 
+//  refcount--, 如果refcount==0， 销毁data_t
 void
 data_unref (data_t *this)
 {
@@ -716,6 +751,7 @@ data_unref (data_t *this)
                 data_destroy (this);
 }
 
+// refcount++
 data_t *
 data_ref (data_t *this)
 {
@@ -734,6 +770,7 @@ data_ref (data_t *this)
         return this;
 }
 
+// 
 data_t *
 int_to_data (int64_t value)
 {
@@ -744,16 +781,20 @@ int_to_data (int64_t value)
                 return NULL;
         }
 
+        // data->data malloc内存，并把value转换成PRId64字符串存进去
+        // PRId64跨平台的表述，64位下lld，32位下ld，对int64_t下不同位数的描述
         ret = gf_asprintf (&data->data, "%"PRId64, value);
         if (-1 == ret) {
                 gf_msg_debug ("dict", 0, "asprintf failed");
                 return NULL;
         }
+        // 为什么多加了个1？？？
         data->len = strlen (data->data) + 1;
 
         return data;
 }
 
+// 
 data_t *
 data_from_int64 (int64_t value)
 {

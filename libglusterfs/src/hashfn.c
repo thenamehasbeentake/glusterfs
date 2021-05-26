@@ -36,25 +36,38 @@ ReallySimpleHash (char *path, int len)
 */
 
 /* In any case make sure, you return 1 */
-
+// 折叠法hash？
 uint32_t SuperFastHash (const char * data, int32_t len) {
+        // 初始值为len
         uint32_t hash = len, tmp;
         int32_t rem;
 
         if (len <= 1 || data == NULL) return 1;
-
+// 长度第2位存在rem中，len右移2位。循环中每次计算4个byte的hash值，这里len除以4
         rem = len & 3;
         len >>= 2;
 
+// 长度大于4
         /* Main loop */
         for (;len > 0; len--) {
+// #define get16bits(d) (*((const uint16_t *) (d)))
+                // data[0] data[1]合并为一个uint16_t 加到hash中
                 hash  += get16bits (data);
+                // 处理data[2] data[3] 
+                // hash低11位和最高5位保留原值， 12到28位与data[2] data[3]合并值做异或运算
                 tmp    = (get16bits (data+2) << 11) ^ hash;
+                // tmp高16位与hash异或，低16位赋值给hash
+
+                // 低11位为上次hash值，最高5位为hash原值最高5位异或11到15位
+                // 中间的为hash原值异或data[3]data[4] ，中间部分高11位再异或hash原值的低11位，低5位保持不变
                 hash   = (hash << 16) ^ tmp;
+                // 指针右移，循环需要
                 data  += 2*sizeof (uint16_t);
+                // hash再加上由移动11位的值(低11位为上次hash值)
                 hash  += hash >> 11;
         }
 
+        // 最后数组不足4个字节的处理
         /* Handle end cases */
         switch (rem) {
         case 3: hash += get16bits (data);
