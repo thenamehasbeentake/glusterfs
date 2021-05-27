@@ -650,6 +650,7 @@ dict_destroy (dict_t *this)
 
         // 如果this->members不是内部的member，内存回收
         // members_internal？？？
+        // 回来看
         if (this->members != &this->members_internal) {
                 mem_put (this->members);
         }
@@ -671,12 +672,28 @@ dict_destroy (dict_t *this)
         /* thread0 then goes and sets it to 11 */
         /* As it is for information purpose only, no functionality will be
            broken by this, but a point to consider about ATOMIC macros. */
+        // ctx->stats中存着与dict有关的上下文, stats中三个变量，int64_t+gf_lock_t
+        // 应该是用来是计数的
+        // struct {
+        //         gf_atomic_t max_dict_pairs;
+        //         gf_atomic_t total_pairs_used;
+        //         gf_atomic_t total_dicts_used;
+        // } stats;
+        // typedef struct gf_atomic_t {
+        //         int64_t    cnt;
+        //         gf_lock_t  lk;
+        // } gf_atomic_t;
+
+        // GF_ATOMIC_GET, 加锁gf_lock_t  lk， 并取出int64_t    cnt
         current_max = GF_ATOMIC_GET (ctx->stats.max_dict_pairs);
+
+        // GF_ATOMIC_INIT 初始化话参数1的lock，并给参数1的cnt赋值为参数2
         if (current_max < this->max_count)
                 GF_ATOMIC_INIT (ctx->stats.max_dict_pairs, this->max_count);
         // + total_pairs
+        // GF_ATOMIC_ADD 加锁 参数2加到参数1上
         GF_ATOMIC_ADD (ctx->stats.total_pairs_used, total_pairs);
-        // +1
+        // dicts_used+1
         GF_ATOMIC_INC (ctx->stats.total_dicts_used);
 
         if (!this->is_static)
@@ -783,6 +800,7 @@ int_to_data (int64_t value)
 
         // data->data malloc内存，并把value转换成PRId64字符串存进去
         // PRId64跨平台的表述，64位下lld，32位下ld，对int64_t下不同位数的描述
+        // gf_asprintf (char **string_ptr, const char *format, ...)
         ret = gf_asprintf (&data->data, "%"PRId64, value);
         if (-1 == ret) {
                 gf_msg_debug ("dict", 0, "asprintf failed");
@@ -794,7 +812,7 @@ int_to_data (int64_t value)
         return data;
 }
 
-// 
+// data_from_int64与int_to_data一个意思
 data_t *
 data_from_int64 (int64_t value)
 {
@@ -814,6 +832,8 @@ data_from_int64 (int64_t value)
         return data;
 }
 
+
+// 将int32_t类型的值转换为data_t类型
 data_t *
 data_from_int32 (int32_t value)
 {
@@ -823,6 +843,7 @@ data_from_int32 (int32_t value)
         if (!data) {
                 return NULL;
         }
+        // PRID32大概一个PRID64类似
         ret = gf_asprintf (&data->data, "%"PRId32, value);
         if (-1 == ret) {
                 gf_msg_debug ("dict", 0, "asprintf failed");
@@ -834,6 +855,7 @@ data_from_int32 (int32_t value)
         return data;
 }
 
+// 将int16_t类型的值转换为data_t类型
 data_t *
 data_from_int16 (int16_t value)
 {
@@ -843,6 +865,7 @@ data_from_int16 (int16_t value)
         if (!data) {
                 return NULL;
         }
+        // PRID16大概与PRID64有类似的效果
         ret = gf_asprintf (&data->data, "%"PRId16, value);
         if (-1 == ret) {
                 gf_msg_debug ("dict", 0, "asprintf failed");
@@ -854,6 +877,7 @@ data_from_int16 (int16_t value)
         return data;
 }
 
+// 一个字节的int8_t直接就是%d了 (●'◡'●)
 data_t *
 data_from_int8 (int8_t value)
 {
@@ -874,6 +898,7 @@ data_from_int8 (int8_t value)
         return data;
 }
 
+// 无符号的uint64_t
 data_t *
 data_from_uint64 (uint64_t value)
 {
@@ -883,6 +908,7 @@ data_from_uint64 (uint64_t value)
         if (!data) {
                 return NULL;
         }
+        // PRIu64大概与PRId64类似
         ret = gf_asprintf (&data->data, "%"PRIu64, value);
         if (-1 == ret) {
                 gf_msg_debug ("dict", 0, "asprintf failed");
@@ -894,6 +920,7 @@ data_from_uint64 (uint64_t value)
         return data;
 }
 
+// double 类型值转换成data
 static data_t *
 data_from_double (double value)
 {
@@ -905,7 +932,7 @@ data_from_double (double value)
         if (!data) {
                 return NULL;
         }
-
+        // 为啥不是%lf呢
         ret = gf_asprintf (&data->data, "%f", value);
         if (ret == -1) {
                 return NULL;
@@ -915,7 +942,7 @@ data_from_double (double value)
         return data;
 }
 
-
+// 与data_from_unint64类似
 data_t *
 data_from_uint32 (uint32_t value)
 {
@@ -925,6 +952,7 @@ data_from_uint32 (uint32_t value)
         if (!data) {
                 return NULL;
         }
+        // PRIu32与PRIu64类似
         ret = gf_asprintf (&data->data, "%"PRIu32, value);
         if (-1 == ret) {
                 gf_msg_debug ("dict", 0, "asprintf failed");
@@ -936,7 +964,7 @@ data_from_uint32 (uint32_t value)
         return data;
 }
 
-
+// 同上
 data_t *
 data_from_uint16 (uint16_t value)
 {
@@ -956,11 +984,13 @@ data_from_uint16 (uint16_t value)
         return data;
 }
 
+// 通常的ptr转换为data_t, 赋值is_static, is_static用来参数的指针内存是否要dict来释放
+// static???
 static data_t *
 data_from_ptr_common (void *value, gf_boolean_t is_static)
 {
         /* it is valid to set 0/NULL as a value, no need to check *value */
-
+        //  data_t的data可以为空，不需要检查
         data_t *data = get_new_data ();
         if (!data) {
                 return NULL;
@@ -972,7 +1002,8 @@ data_from_ptr_common (void *value, gf_boolean_t is_static)
         return data;
 }
 
-data_t *
+// str转换成data，返回的data_t的is_static为1(value释放工作有调用者完成)，data_t的data浅拷贝
+data_t 
 str_to_data (char *value)
 {
         if (!value) {
@@ -993,6 +1024,7 @@ str_to_data (char *value)
         return data;
 }
 
+// dynamic str转换为data, 参数释放工作由data_t完成
 data_t *
 data_from_dynstr (char *value)
 {
@@ -1012,6 +1044,7 @@ data_from_dynstr (char *value)
         return data;
 }
 
+// dynamic ptr转换为data, 参数释放工作由data_t完成
 data_t *
 data_from_dynptr (void *value, int32_t len)
 {
@@ -1026,6 +1059,7 @@ data_from_dynptr (void *value, int32_t len)
         return data;
 }
 
+// bin ptr转换为data, 参数释放工作由调用者完成
 data_t *
 bin_to_data (void *value, int32_t len)
 {
@@ -1047,6 +1081,7 @@ bin_to_data (void *value, int32_t len)
         return data;
 }
 
+//将data_t转换成int64_t类型
 int64_t
 data_to_int64 (data_t *data)
 {
@@ -1065,6 +1100,7 @@ data_to_int64 (data_t *data)
         return (int64_t) strtoull (str, NULL, 0);
 }
 
+// data_t转换为int32_t
 int32_t
 data_to_int32 (data_t *data)
 {
@@ -1073,14 +1109,24 @@ data_to_int32 (data_t *data)
                                   LG_MSG_INVALID_ARG, "data is NULL");
                 return -1;
         }
-
+        // 为什么+1呢？data->len为data占用的字节数
+        // alloc栈上分配内存，用完会释放
         char *str = alloca (data->len + 1);
         if (!str)
                 return -1;
 
         memcpy (str, data->data, data->len);
         str[data->len] = '\0';
-
+        // strtoul, 将str转换为ul类型，无符号的长整型数
+        // _Check_return_
+        // _ACRTIMP unsigned long __cdecl strtoul(
+        // _In_z_                   char const* _String,
+        // _Out_opt_ _Deref_post_z_ char**      _EndPtr,
+        // _In_                     int         _Radix
+        // );
+        // _String入参
+        // _EndPtr赋值为不和条件的指针
+        // _Radix表示进制，2~36， 0值根据str来自动判断，比如0x。。。转换为16进制
         return strtoul (str, NULL, 0);
 }
 
@@ -1104,7 +1150,10 @@ data_to_int16 (data_t *data)
 
         errno = 0;
         value = strtol (str, NULL, 0);
-
+// limit.h
+// #define SHRT_MAX      32767
+// #define USHRT_MAX     0xffff
+// 无用功
         if ((value > SHRT_MAX) || (value < SHRT_MIN)) {
                 errno = ERANGE;
                 gf_msg_callingfn ("dict", GF_LOG_WARNING, errno,
@@ -1137,7 +1186,9 @@ data_to_int8 (data_t *data)
 
         errno = 0;
         value = strtol (str, NULL, 0);
-
+// 无用功
+// #define SCHAR_MAX     127
+// #define UCHAR_MAX     0xff
         if ((value > SCHAR_MAX) || (value < SCHAR_MIN)) {
                 errno = ERANGE;
                 gf_msg_callingfn ("dict", GF_LOG_WARNING, errno,
@@ -1243,6 +1294,7 @@ data_to_uint8 (data_t *data)
         return (uint8_t) value;
 }
 
+// data to str不用转，直接返回就ok了...
 char *
 data_to_str (data_t *data)
 {

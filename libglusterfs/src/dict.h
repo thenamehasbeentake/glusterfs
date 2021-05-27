@@ -63,9 +63,9 @@ typedef struct _data_pair data_pair_t;
 struct _data {
         unsigned char  is_static:1;
         unsigned char  is_const:1;
-        int32_t        len;             // strlen(data)+1
-        char          *data;
-        int32_t        refcount;
+        int32_t        len;             // strlen(data)+1, data占用内存字节数， 由于'\0'所以+1
+        char          *data;            // data_中存储的数据，为char*类型。提供了data_from_int{64,32,16}等接口，可以将这些类型转换为data类型
+        int32_t        refcount;        // dict引用计数， 将为0时，释放dict
         gf_lock_t      lock;
 };
 
@@ -79,10 +79,10 @@ struct _data_pair {
 };
 
 struct _dict {
-        unsigned char   is_static:1;
+        unsigned char   is_static:1;    // 如果为真，dict销毁的时候不会归还内存
         int32_t         hash_size;
         int32_t         count;          // key_count
-        int32_t         refcount;
+        int32_t         refcount;       // dict引用计数， 将为0时，释放dict
         data_pair_t   **members;
         data_pair_t    *members_list;
         char           *extra_free;

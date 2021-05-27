@@ -585,9 +585,9 @@ struct _glusterfs_ctx {
 
 
         struct {
-                gf_atomic_t max_dict_pairs;
-                gf_atomic_t total_pairs_used;
-                gf_atomic_t total_dicts_used;
+                gf_atomic_t max_dict_pairs;     // 某个dict中使用的最大dict_pairs， dict_destory更新
+                gf_atomic_t total_pairs_used;   // 历史使用的过的dict_pairs数量
+                gf_atomic_t total_dicts_used;   // 历史使用的过的dicts数量
         } stats;
 
         struct list_head   volfile_list;
