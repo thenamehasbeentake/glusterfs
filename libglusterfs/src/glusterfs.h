@@ -216,7 +216,7 @@
 #define GLUSTERFS_RDMA_INLINE_THRESHOLD       (2048)
 #define GLUSTERFS_RDMA_MAX_HEADER_SIZE        (228) /* (sizeof (rdma_header_t)                 \
                                                        + RDMA_MAX_SEGMENTS \
-                                                       * sizeof (rdma_read_chunk_t))
+                                                       * sizeof (rdma_read_chunk_t))            \
                                                        */
 
 #define GLUSTERFS_RPC_REPLY_SIZE               24
@@ -595,7 +595,9 @@ struct _glusterfs_ctx {
 typedef struct _glusterfs_ctx glusterfs_ctx_t;
 
 typedef struct {
+        // SHA256_DIGEST_LENGTH 32
         char               volfile_checksum[SHA256_DIGEST_LENGTH];
+        // NAME_MAX 2555
         char               vol_id[NAME_MAX+1];
         struct list_head   volfile_list;
 
