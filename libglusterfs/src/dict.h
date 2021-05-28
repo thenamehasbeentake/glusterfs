@@ -84,14 +84,14 @@ struct _dict {
         int32_t         count;          // key_count
         int32_t         refcount;       // dict引用计数， 将为0时，释放dict
         data_pair_t   **members;
-        data_pair_t    *members_list;
+        data_pair_t    *members_list;   // _data_pair的prev，next 双向链表的头
         char           *extra_free;
         char           *extra_stdfree;
         gf_lock_t       lock;
         data_pair_t    *members_internal;
         data_pair_t     free_pair;
         gf_boolean_t    free_pair_in_use;
-        uint32_t        max_count;
+        uint32_t        max_count;              // 当前dict的最大的pair数
 };
 
 typedef gf_boolean_t (*dict_match_t) (dict_t *d, char *k, data_t *v,

@@ -427,6 +427,7 @@ dict_set_lk (dict_t *this, char *key, data_t *value, gf_boolean_t replace)
                 strcpy (pair->key, key);
         }
         pair->key_hash = hash;
+        // data在与data_pair绑定时才会refcount+1,未绑定时refcount初始化0
         pair->value = data_ref (value);
 
         pair->hash_next = this->members[hashval];
@@ -1328,6 +1329,7 @@ data_to_bin (data_t *data)
         return data->data;
 }
 
+// dict_null_foreach_fn顾名思义就是字典——啥都不做——遍历——函数，所有里面啥都没做
 int
 dict_null_foreach_fn (dict_t *d, char *k,
                       data_t *v, void *tmp)
@@ -1335,6 +1337,7 @@ dict_null_foreach_fn (dict_t *d, char *k,
         return 0;
 }
 
+// dict_remove_foreach_fn顾名思义就是字典_删除_遍历_函数
 int
 dict_remove_foreach_fn (dict_t *d, char *k,
                         data_t *v, void *_tmp)
@@ -1345,17 +1348,21 @@ dict_remove_foreach_fn (dict_t *d, char *k,
                         d?"key":"dictionary");
                 return -1;
         }
-
+        // 删除字典d中，key为key的data_pair
         dict_del (d, k);
         return 0;
 }
 
+// 与dict_null_foreach_fn相反，字典匹配所有， 返回true
 gf_boolean_t
 dict_match_everything (dict_t *d, char *k, data_t *v, void *data)
 {
         return _gf_true;
 }
 
+// 正常的dict_foreach,遍历
+// 遍历, dict中所有data_pair, 并对每一个data_pair执行fn， data为fn的参数
+// 返回data_pair数
 int
 dict_foreach (dict_t *dict,
               int (*fn)(dict_t *this,
@@ -1422,16 +1429,23 @@ dict_foreach_match (dict_t *dict,
         return count;
 }
 
+// dict_fnmatch, 使用match匹配k
 static gf_boolean_t
 dict_fnmatch (dict_t *d, char *k, data_t *val, void *match_data)
 {
+        // fnmatch函数介绍
+        // https://blog.csdn.net/wowocpp/article/details/86716568
+        // man fnmatch
+        // 返回key是否与match_data中的正则表达式匹配成功
         return (fnmatch (match_data, k, 0) == 0);
 }
+
 /* return values:
    -1 = failure,
     0 = no matches found,
    +n = n number of matches
 */
+// 遍历dict中的data_pair，对每一个key进行pattern的fnmatch，匹配成功执行fn回调,data为回调参数
 int
 dict_foreach_fnmatch (dict_t *dict, char *pattern,
                       int (*fn)(dict_t *this,
@@ -1451,12 +1465,13 @@ dict_foreach_fnmatch (dict_t *dict, char *pattern,
  * @size      : size of the buffer which is sent (can be 0, in which case buffer
  *              is not packed but only length is returned)
  * @dict      : dictionary of which all the keys will be packed
- * @filter_fn : keys matched in filter_fn() is counted.
+ * @filter_fn : keys matched in filter_fn() is counted.过滤函数
  *
  * @return : @length of string after joining keys.
  *
  */
-
+// 返回 符合条件的pairs->key总长度， 包含\0, 
+// 字典——keys——连在一起， value为缓冲区，size为缓冲区大小
 int
 dict_keys_join (void *value, int size, dict_t *dict,
                 int (*filter_fn)(char *k))
@@ -1475,6 +1490,7 @@ dict_keys_join (void *value, int size, dict_t *dict,
 		}
 
 		if (value && (size > len))
+                // strncpy相对于strcpy更安全
 			strncpy (value + len, pairs->key, size - len);
 
                 len += (strlen (pairs->key) + 1);
@@ -1485,12 +1501,14 @@ dict_keys_join (void *value, int size, dict_t *dict,
 	return len;
 }
 
+// kv值拷贝到newdict中
 static int
 dict_copy_one (dict_t *unused, char *key, data_t *value, void *newdict)
 {
         return dict_set ((dict_t *)newdict, key, (value));
 }
 
+// 遍历dict, kv值拷贝到new中
 dict_t *
 dict_copy (dict_t *dict,
            dict_t *new)
@@ -1509,6 +1527,7 @@ dict_copy (dict_t *dict,
         return new;
 }
 
+// 遍历dict，删除kv
 int
 dict_reset (dict_t *dict)
 {
@@ -1524,6 +1543,7 @@ out:
         return ret;
 }
 
+// 使用引用来拷贝, 似乎与dict_copy区别不大？？？回来看
 dict_t *
 dict_copy_with_ref (dict_t *dict,
                     dict_t *new)
@@ -1554,7 +1574,7 @@ fail:
  *               -val error, val = errno
  */
 
-
+// 在dict中查找key，引用+1赋值给data
 int
 dict_get_with_ref (dict_t *this, char *key, data_t **data)
 {
@@ -1586,6 +1606,7 @@ err:
         return ret;
 }
 
+// 取出data的data
 static int
 data_to_ptr_common (data_t *data, void **val)
 {
@@ -1601,7 +1622,7 @@ err:
         return ret;
 }
 
-
+// data_from_系列函数的反函数
 static int
 data_to_int8_ptr (data_t *data, int8_t *val)
 {
@@ -1791,6 +1812,7 @@ data_to_uint64_ptr (data_t *data, uint64_t *val)
 
         errno = 0;
         *val = strtoull (str, NULL, 0);
+        // 可能回变成ERANGE
         if (errno != 0)
                 ret = -errno;
 
@@ -1826,6 +1848,7 @@ err:
         return ret;
 }
 
+// 从dict中取出key对应的value并转换成int8_t类型存在val中
 int
 dict_get_int8 (dict_t *this, char *key, int8_t *val)
 {
@@ -1837,6 +1860,7 @@ dict_get_int8 (dict_t *this, char *key, int8_t *val)
                 goto err;
         }
 
+        // 这里有个data_ref操作，结束的时候需要data_unref一下
         ret = dict_get_with_ref (this, key, &data);
         if (ret != 0) {
                 goto err;
@@ -1850,7 +1874,7 @@ err:
         return ret;
 }
 
-
+// 在dict中新增一个key,value为val转换为的char*
 int
 dict_set_int8 (dict_t *this, char *key, int8_t val)
 {
@@ -1862,7 +1886,7 @@ dict_set_int8 (dict_t *this, char *key, int8_t val)
                 ret = -EINVAL;
                 goto err;
         }
-
+        // 如果存在key， replace
         ret = dict_set (this, key, data);
         if (ret < 0)
                 data_destroy (data);
@@ -2186,6 +2210,8 @@ err:
         return ret;
 }
 
+// new 一个 static 的data_t, 再设置到this中
+// 这个data怎么释放呢？？
 int
 dict_set_static_ptr (dict_t *this, char *key, void *ptr)
 {
@@ -2200,12 +2226,14 @@ dict_set_static_ptr (dict_t *this, char *key, void *ptr)
 
         ret = dict_set (this, key, data);
         if (ret < 0)
+                // 因为是static，所有只能释放一下lock和data本身
                 data_destroy (data);
 
 err:
         return ret;
 }
 
+// 在dict_t中增加或者替换一对kv，value为ptr和len转换成的data
 int
 dict_set_dynptr (dict_t *this, char *key, void *ptr, size_t len)
 {
@@ -2241,7 +2269,8 @@ dict_get_ptr (dict_t *this, char *key, void **ptr)
         if (ret != 0) {
                 goto err;
         }
-
+        // key对应的data_t的data，地址赋值给*ptr
+        // 临时变量的data由于refcount +1 再-1，所有不会出现悬挂指针的情况
         ret = data_to_ptr_common (data, ptr);
         if (ret != 0) {
                 goto err;
@@ -2254,6 +2283,7 @@ err:
         return ret;
 }
 
+// 相较于dict_get_ptr多了个len
 int
 dict_get_ptr_and_len (dict_t *this, char *key, void **ptr, int *len)
 {
@@ -2352,12 +2382,15 @@ err:
         return ret;
 }
 
+// alloc_str拷贝自str, 再根据(this, key, alloc_key)在this中replace或者add一个k，v
+// 跟上满的dict_set_str相比相比就多了一个gf_strdup?
 int
 dict_set_dynstr_with_alloc (dict_t *this, char *key, const char *str)
 {
         char *alloc_str = NULL;
         int   ret       = -1;
-
+        // 回来看 gf_strdup
+        // const char* to char*
         alloc_str = gf_strdup (str);
         if (!alloc_str)
                 return -1;
@@ -2389,6 +2422,7 @@ err:
         return ret;
 }
 
+// alloc_str拷贝自str, 再根据(this, key, alloc_key)在this中add一个k，v。跟dict_set_dynstr_with_alloc相比 boolean replace 为0？
 int
 dict_add_dynstr_with_alloc (dict_t *this, char *key, char *str)
 {
@@ -2415,7 +2449,7 @@ out:
         return ret;
 }
 
-
+// 跟dict_get_str 区别甚小？
 int
 dict_get_bin (dict_t *this, char *key, void **bin)
 {
@@ -2475,6 +2509,9 @@ dict_set_bin_common (dict_t *this, char *key, void *ptr, size_t size,
         ret = dict_set (this, key, data);
         if (ret < 0) {
                 /* don't free data->data, let callers handle it */
+                // data->is_static = 1, data_destroy中不会free，无用功
+                // data->is_static可以不为static？？？
+                // bad smell, 回来看
                 data->data = NULL;
                 data_destroy (data);
         }
