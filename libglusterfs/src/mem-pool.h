@@ -33,10 +33,14 @@
 #endif
 
 #define GF_MEM_TRAILER_SIZE 8
+// java字节码的魔数也是0xCAFEBABE
 #define GF_MEM_HEADER_MAGIC  0xCAFEBABE
+// 一般的HeapAlloc和LocalAlloc分配内存的初值都是这个 ？？
 #define GF_MEM_TRAILER_MAGIC 0xBAADF00D
+// 方便调试，防止溢出
 #define GF_MEM_INVALID_MAGIC 0xDEADC0DE
 
+// memory according , 内存记录变化
 struct mem_acct_rec {
 	const char     *typestr;
         size_t          size;

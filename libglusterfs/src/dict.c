@@ -349,6 +349,7 @@ dict_lookup (dict_t *this, char *key, data_t **data)
 }
 
 // 回来看
+// dict的结构主要就是这个函数
 static int32_t
 dict_set_lk (dict_t *this, char *key, data_t *value, gf_boolean_t replace)
 {
@@ -430,6 +431,7 @@ dict_set_lk (dict_t *this, char *key, data_t *value, gf_boolean_t replace)
         // data在与data_pair绑定时才会refcount+1,未绑定时refcount初始化0
         pair->value = data_ref (value);
 
+        // 拉链
         pair->hash_next = this->members[hashval];
         this->members[hashval] = pair;
 
@@ -2570,6 +2572,9 @@ dict_set_static_bin (dict_t *this, char *key, void *ptr, size_t size)
  *                                                [@default_val = anything else]
  */
 
+// key对于的v是bool类型
+// 返回key对于的v值， 无key返回值为default_val
+// 入参为空，返回-1
 int
 dict_get_str_boolean (dict_t *this, char *key, int default_val)
 {
@@ -2606,6 +2611,7 @@ err:
         return ret;
 }
 
+// 替换key值。找到原key的v， 插入新值kv，删除原值
 int
 dict_rename_key (dict_t *this, char *key, char *replace_key)
 {
@@ -2645,9 +2651,9 @@ dict_rename_key (dict_t *this, char *key, char *replace_key)
  *     4        4         4       <key len>   <value len>
  */
 
-#define DICT_HDR_LEN               4
-#define DICT_DATA_HDR_KEY_LEN      4
-#define DICT_DATA_HDR_VAL_LEN      4
+#define DICT_HDR_LEN               4            // count
+#define DICT_DATA_HDR_KEY_LEN      4            // key len
+#define DICT_DATA_HDR_VAL_LEN      4            // val len
 
 /**
  * dict_serialized_length_lk - return the length of serialized dict. This
@@ -2658,6 +2664,7 @@ dict_rename_key (dict_t *this, char *key, char *replace_key)
  *        : failure: -errno
  */
 
+// 返回序列化之后的字节数，只算序列化需要的字节数，不做序列化操作
 int
 dict_serialized_length_lk (dict_t *this)
 {
@@ -2731,6 +2738,7 @@ out:
  *          failure: -errno
  */
 
+// 序列化，大小端的转换
 int
 dict_serialize_lk (dict_t *this, char *buf)
 {
@@ -2755,7 +2763,43 @@ dict_serialize_lk (dict_t *this, char *buf)
                         "count (%d) < 0!", count);
                 goto out;
         }
+// static uint32_t (*hton32) (uint32_t) = __byte_order_n32;
+// static inline uint32_t
+// __byte_order_n32 (uint32_t i)
+// {
+// 	uint32_t num = 1;
 
+// 	if (((char *)(&num))[0] == 1) {
+//                 /* cpu is le */
+// 		hton16 = __swap16;
+// 		hton32 = __swap32;
+// 		hton64 = __swap64;
+// 	} else {
+//                 /* cpu is be */
+// 		hton16 = __noswap16;
+// 		hton32 = __noswap32;
+// 		hton64 = __noswap64;
+// 	}
+
+// 	return hton32 (i);
+// }
+
+// static inline uint32_t
+// __swap32 (uint32_t x)
+// {
+// 	return do_swap4(x);
+// }
+// #define LS1 0x00ffU
+// #define MS1 0xff00U
+// #define LS2 0x0000ffffU
+// #define MS2 0xffff0000U
+// #define do_swap2(x) (((x&LS1) << 8)|(((x&MS1) >> 8)))
+// #define do_swap4(x) ((do_swap2(x&LS2) << 16)|(do_swap2((x&MS2) >> 16)))
+// 将count转换成大端模式,
+// 比如uint32_t i = 1， i占4个字节，(char*)(&i)指针指向4个元素的char*数组
+// 大端模式就是高地址(char*)(&i)[3], 存放低字节1
+// 小端模式就是低地址(char*)(&i)[0], 存放低字节1
+// hton -> host to network
         netword = hton32 (count);
         memcpy (buf, &netword, sizeof(netword));
         buf += DICT_HDR_LEN;
@@ -2777,6 +2821,7 @@ dict_serialize_lk (dict_t *this, char *buf)
 
                 keylen  = strlen (pair->key);
                 netword = hton32 (keylen);
+                // 存的keylen没有+'\0', 计算dict_serialize_length时候有加'\0'的所占内存
                 memcpy (buf, &netword, sizeof(netword));
                 buf += DICT_DATA_HDR_KEY_LEN;
 
@@ -2819,6 +2864,7 @@ out:
  *        : failure: -errno
  */
 
+// 在dict_serialized_length的基础上多了一个lock操作
 int
 dict_serialized_length (dict_t *this)
 {
@@ -2851,6 +2897,7 @@ out:
  *          failure: -errno
  */
 
+// 在dict_serialize_lk的基础上多了一个lock操作
 int
 dict_serialize (dict_t *this, char *buf)
 {
@@ -2883,6 +2930,9 @@ out:
  *          failure: -errno
  */
 
+// 反序列化
+// dict中的key， 是orig_buf中的浅拷贝？？？
+// 回来看
 int32_t
 dict_unserialize (char *orig_buf, int32_t size, dict_t **fill)
 {
@@ -2922,7 +2972,7 @@ dict_unserialize (char *orig_buf, int32_t size, dict_t **fill)
                                   LG_MSG_INVALID_ARG, "*fill is null!");
                 goto out;
         }
-
+        // buf = orig_buf???
         if ((buf + DICT_HDR_LEN) > (orig_buf + size)) {
                 gf_msg_callingfn ("dict", GF_LOG_ERROR, 0,
                                   LG_MSG_UNDERSIZED_BUF, "undersized buffer "
@@ -2982,6 +3032,7 @@ dict_unserialize (char *orig_buf, int32_t size, dict_t **fill)
                                           (long)(buf + keylen));
                         goto out;
                 }
+                // 这个key咋回事儿，
                 key = buf;
                 buf += keylen + 1;  /* for '\0' */
 
@@ -3025,6 +3076,7 @@ out:
  *          failure: -errno
  */
 
+// *buf 分配堆内存， 序列化dict到buf
 int32_t
 dict_allocate_and_serialize (dict_t *this, char **buf, u_int *length)
 {
@@ -3079,6 +3131,7 @@ out:
  * @return    : 0 -> success
  *            : -errno -> faliure
  */
+// 序列化字典中所以的value， 以delimiter分割开
 int
 dict_serialize_value_with_delim_lk (dict_t *this, char *buf, int32_t *serz_len,
                                     char delimiter)
@@ -3170,6 +3223,7 @@ out:
         return ret;
 }
 
+// 将字典中的kv按照format的形式输出到dump中
 int
 dict_dump_to_str (dict_t *dict, char *dump, int dumpsize, char *format)
 {
@@ -3188,6 +3242,7 @@ dict_dump_to_str (dict_t *dict, char *dump, int dumpsize, char *format)
         return 0;
 }
 
+// 以log的方式打出dict中的内容(k,v)(k,v)...最多64k
 void
 dict_dump_to_log (dict_t *dict)
 {
@@ -3213,6 +3268,7 @@ dict_dump_to_log (dict_t *dict)
         return;
 }
 
+// 回来看， 将dict中内容打到， 不知道打到哪儿了
 void
 dict_dump_to_statedump (dict_t *dict, char *dict_name, char *domain)
 {
@@ -3239,6 +3295,7 @@ dict_dump_to_statedump (dict_t *dict, char *dict_name, char *domain)
         return;
 }
 
+// 返回一个kv值为参数中name，value的字典
 dict_t *
 dict_for_key_value (const char *name, const char *value, size_t size,
                     gf_boolean_t is_static)
@@ -3267,6 +3324,7 @@ dict_for_key_value (const char *name, const char *value, size_t size,
 /*
  * "strings" should be NULL terminated strings array.
  */
+// string中是否有dict中的key
 int
 dict_has_key_from_array (dict_t *dict, char **strings, gf_boolean_t *result)
 {

@@ -12,7 +12,7 @@
 #define _BYTE_ORDER_H
 
 #include <inttypes.h>
-
+// less size 1?
 #define LS1 0x00ffU
 #define MS1 0xff00U
 #define LS2 0x0000ffffU
@@ -24,7 +24,7 @@
 static uint16_t (*hton16) (uint16_t);
 static uint32_t (*hton32) (uint32_t);
 static uint64_t (*hton64) (uint64_t);
-
+// host to network?? 这是什么阴间操作
 #define ntoh16 hton16
 #define ntoh32 hton32
 #define ntoh64 hton64
@@ -45,7 +45,7 @@ static uint64_t (*htobe64) (uint64_t);
 #define betoh32 htobe32
 #define betoh64 htobe64
 
-
+// 2，4，8字节，大小端切换
 #define do_swap2(x) (((x&LS1) << 8)|(((x&MS1) >> 8)))
 #define do_swap4(x) ((do_swap2(x&LS2) << 16)|(do_swap2((x&MS2) >> 16)))
 #define do_swap8(x) ((do_swap4(x&LS4) << 32)|(do_swap4((x&MS4) >> 32)))
@@ -97,7 +97,7 @@ static inline uint16_t
 __byte_order_n16 (uint16_t i)
 {
 	uint32_t num = 1;
-
+	// 数字的低位在内存的低字节，小端
 	if (((char *)(&num))[0] == 1) {
                 /* cpu is le */
 		hton16 = __swap16;
@@ -291,7 +291,7 @@ __byte_order_be64 (uint64_t i)
 	return htobe64 (i);
 }
 
-
+// 序列化时用到
 static uint16_t (*htobe16) (uint16_t) = __byte_order_be16;
 static uint32_t (*htobe32) (uint32_t) = __byte_order_be32;
 static uint64_t (*htobe64) (uint64_t) = __byte_order_be64;

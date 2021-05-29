@@ -80,16 +80,16 @@ struct _data_pair {
 
 struct _dict {
         unsigned char   is_static:1;    // 如果为真，dict销毁的时候不会归还内存
-        int32_t         hash_size;
+        int32_t         hash_size;      // members的一维大小，拉链法解决hash碰撞
         int32_t         count;          // key_count
         int32_t         refcount;       // dict引用计数， 将为0时，释放dict
-        data_pair_t   **members;
+        data_pair_t   **members;        //members[i]存放hash%hash_size = i的data_pair_t一条链
         data_pair_t    *members_list;   // _data_pair的prev，next 双向链表的头
-        char           *extra_free;
-        char           *extra_stdfree;
+        char           *extra_free;     // 内存池的__gf_free, 额外的空间
+        char           *extra_stdfree;  // free
         gf_lock_t       lock;
-        data_pair_t    *members_internal;
-        data_pair_t     free_pair;
+        data_pair_t    *members_internal;       // hash_size初始化为1时members = &members_internal
+        data_pair_t     free_pair;              // 对只有一个data_pair的dict优化, 不用从内存池获取内存而直接使用dict的内存
         gf_boolean_t    free_pair_in_use;
         uint32_t        max_count;              // 当前dict的最大的pair数
 };

@@ -12,7 +12,8 @@
 #define _ATOMIC_H
 
 #include <inttypes.h>
-
+// AC_CHECK_FUNC([__atomic_load], [have_atomic_builtins])
+// AC_CHECK_FUNC([AC_CHECK_FUNC([__sync_fetch_and_add], [have_sync_builtins])], [have_sync_builtins])
 #if defined(HAVE_ATOMIC_BUILTINS) || defined(HAVE_SYNC_BUILTINS)
 /* optimized implementation, macros only */
 
@@ -95,13 +96,18 @@ gf_atomic_add (gf_atomic_t *op, int64_t n)
 
         return ret;
 }
-
-
+// ctx->stat中对dict的计数有用到
+// 原子操作初始化， cnt类型int64_t
 #define GF_ATOMIC_INIT(op, cnt)   gf_atomic_init (&op, cnt)
+// 原子操作获取cnt
 #define GF_ATOMIC_GET(op)         gf_atomic_get (&op)
+// 原子操作+1
 #define GF_ATOMIC_INC(op)         gf_atomic_add (&op, 1)
+// 原子操作-1
 #define GF_ATOMIC_DEC(op)         gf_atomic_add (&op, -1)
+// 原子操作+n
 #define GF_ATOMIC_ADD(op, n)      gf_atomic_add (&op, n)
+// 原子操作-n
 #define GF_ATOMIC_SUB(op, n)      gf_atomic_add (&op, -n)
 
 #endif /* HAVE_ATOMIC_SYNC_OPS */
