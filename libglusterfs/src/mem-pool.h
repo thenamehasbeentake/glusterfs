@@ -32,6 +32,9 @@
 #include <cmocka.h>
 #endif
 
+// gf系列的内存分配如gf_malloc在内存中这样分配
+// mem_header, size, GF_MEM_TRAILER_SIZE
+// mem_header::magic = GF_MEM_HEADER_MAGIC， GF_MEM_TRAILER_SIZE处8字节内存 = 0xBAADF00D
 #define GF_MEM_TRAILER_SIZE 8
 // java字节码的魔数也是0xCAFEBABE
 #define GF_MEM_HEADER_MAGIC  0xCAFEBABE
@@ -42,34 +45,36 @@
 
 // memory according , 内存记录变化
 struct mem_acct_rec {
-	const char     *typestr;
-        size_t          size;
-        size_t          max_size;
-        uint32_t        num_allocs;
-        uint32_t        total_allocs;
-        uint32_t        max_num_allocs;
+	const char     *typestr;        // 当前type的str名字
+        size_t          size;           // 当前分配内存的大小， free更新
+        size_t          max_size;       // 最大分配内存大小, 每次分配更新
+        uint32_t        num_allocs;     // 当前alloc的数量，每次分配+1，free-1
+        uint32_t        total_allocs;   // 总alloc的数量， 每次分配+1
+        uint32_t        max_num_allocs; // 最大alloc的数量， max(num_allocs, max_num_allocs)
         gf_lock_t       lock;
 #ifdef DEBUG
         struct list_head   obj_list;
 #endif
 };
 
+// 记录内存分配
 struct mem_acct {
-        uint32_t            num_types;
-        gf_atomic_t         refcnt;
-        struct mem_acct_rec rec[0];
+        uint32_t            num_types;  // 内存分配类型
+        gf_atomic_t         refcnt;     // 引用次数，同一种类型也会分配多次，每次记录+1
+                                        // gf_free的时候-1, 变0的时候free掉该mem_acct
+        struct mem_acct_rec rec[0];     // malloc时设置大小，数组真实大小应该为num_types 
 };
 
 struct mem_header {
-        uint32_t        type;
-        size_t          size;
-        struct mem_acct *mem_acct;
-        uint32_t        magic;
+        uint32_t        type;           // 内存的类型
+        size_t          size;           // 这块内存大小
+        struct mem_acct *mem_acct;      // 记录信息，可以根据mem_acct->rec[type]看到该类型所有的记录
+        uint32_t        magic;          // GF_MEM_HEADER_MAGIC，内存开头的magic
 #ifdef DEBUG
-        struct list_head   acct_list;
+        struct list_head   acct_list;   // 指向mem_acct_rec中的obj_list
 #endif
-        int             padding[8];
-};
+        int             padding[8];     
+}; // mem_header之后跟着size大小的内存，在后面GF_MEN_TRAILER_MAGIC
 
 #define GF_MEM_HEADER_SIZE  (sizeof (struct mem_header))
 

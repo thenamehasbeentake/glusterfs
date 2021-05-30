@@ -27,6 +27,7 @@
 #include "unittest/unittest.h"
 #include "libglusterfs-messages.h"
 
+// mem-accounting
 void
 gf_mem_acct_enable_set (void *data)
 {
@@ -45,6 +46,11 @@ gf_mem_acct_enable_set (void *data)
         return;
 }
 
+// mem-accounting
+// xl->mem_acct的type中记录新增size内存
+// *alloc_ptr， struct mem_header类型
+// *alloc_ptr , dynamic size, (uint32_t)GF_MEM_TRAILER_MAGIC
+// *alloc_ptr再指向dynamic size的开头
 int
 gf_mem_set_acct_info (xlator_t *xl, char **alloc_ptr, size_t size,
 		      uint32_t type, const char *typestr)
@@ -106,6 +112,7 @@ gf_mem_set_acct_info (xlator_t *xl, char **alloc_ptr, size_t size,
 }
 
 
+// 分配nmemb数量个 单个长度为size的内存， 类型为type，对应名字为typestr
 void *
 __gf_calloc (size_t nmemb, size_t size, uint32_t type, const char *typestr)
 {
@@ -113,21 +120,26 @@ __gf_calloc (size_t nmemb, size_t size, uint32_t type, const char *typestr)
         size_t          req_size = 0;
         char            *ptr = NULL;
         xlator_t        *xl = NULL;
-
+        // mem_acct_enable为false的情况下使用std的calloc
         if (!THIS->ctx->mem_acct_enable)
                 return CALLOC (nmemb, size);
 
         xl = THIS;
 
+        // 请求分配size大小， nmemb分配数量， 单位数量大小size
         req_size = nmemb * size;
+        // 实际分配内存总大小， 请求分配内存大小req_size + mem_header_size + mem_trailer_size
         tot_size = req_size + GF_MEM_HEADER_SIZE + GF_MEM_TRAILER_SIZE;
 
+        // 调用std的calloc
         ptr = calloc (1, tot_size);
 
+        // 检查是否分配成功
         if (!ptr) {
                 gf_msg_nomem ("", GF_LOG_ALERT, tot_size);
                 return NULL;
         }
+        // 记录本次calloc的信息
         gf_mem_set_acct_info (xl, &ptr, req_size, type, typestr);
 
         return (void *)ptr;
@@ -172,6 +184,7 @@ __gf_realloc (void *ptr, size_t size)
         REQUIRE(NULL != ptr);
 
         old_header = (struct mem_header *) (ptr - GF_MEM_HEADER_SIZE);
+        // 检查old_healder的magic值是否一致
         GF_ASSERT (old_header->magic == GF_MEM_HEADER_MAGIC);
         tmp_header = *old_header;
 
@@ -187,6 +200,9 @@ __gf_realloc (void *ptr, size_t size)
         new_ptr = __gf_calloc (1, size, type,
                                tmp_header.mem_acct->rec[type].typestr);
         if (new_ptr) {
+                // 拷贝min(size, tmp_header.size)?啥情况
+                // 好像没毛病， 如果新size小。相当于缩小容量，就size超过的就不要了
+                // 如果新size大，最多也只能copy tmp_header.size
                 copy_size = (size > tmp_header.size) ? tmp_header.size : size;
                 memcpy (new_ptr, ptr, copy_size);
                 __gf_free (ptr);
@@ -223,8 +239,9 @@ __gf_realloc (void *ptr, size_t size)
 
         new_header = (struct mem_header *) new_ptr;
         *new_header = tmp_header;
+        // 更新size
         new_header->size = size;
-
+        // 更新返回值
         new_ptr += sizeof (struct mem_header);
         /* data follows in this gap of 'size' bytes */
         *(uint32_t *) (new_ptr + size) = GF_MEM_TRAILER_MAGIC;
@@ -232,6 +249,7 @@ __gf_realloc (void *ptr, size_t size)
         return (void *)new_ptr;
 }
 
+// 回来看， va_copy类的函数需要实践一下下
 int
 gf_vasprintf (char **string_ptr, const char *format, va_list arg)
 {
@@ -274,6 +292,8 @@ gf_asprintf (char **string_ptr, const char *format, ...)
 }
 
 #ifdef DEBUG
+// 传入gf_malloc分配内存的mem_header指针ptr
+// 循环拷贝inval破坏内存中的值
 void
 __gf_mem_invalidate (void *ptr)
 {
@@ -314,6 +334,7 @@ __gf_mem_invalidate (void *ptr)
 }
 #endif /* DEBUG */
 
+// 
 void
 __gf_free (void *free_ptr)
 {
@@ -333,6 +354,7 @@ __gf_free (void *free_ptr)
         header = (struct mem_header *) ptr;
 
         //Possible corruption, assert here
+        // 可能的损坏，在这里断言
         GF_ASSERT (GF_MEM_HEADER_MAGIC == header->magic);
 
         mem_acct = header->mem_acct;
@@ -341,6 +363,7 @@ __gf_free (void *free_ptr)
         }
 
         // This points to a memory overrun
+        // 这指向内存溢出
         GF_ASSERT (GF_MEM_TRAILER_MAGIC ==
                 *(uint32_t *)((char *)free_ptr + header->size));
 
@@ -350,6 +373,7 @@ __gf_free (void *free_ptr)
                 mem_acct->rec[header->type].num_allocs--;
                 /* If all the instances are freed up then ensure typestr is set
                  * to NULL */
+                // 该type的malloc的将被完全释放完， typestr值为NULL
                 if (!mem_acct->rec[header->type].num_allocs)
                         mem_acct->rec[header->type].typestr = NULL;
 #ifdef DEBUG
@@ -357,7 +381,7 @@ __gf_free (void *free_ptr)
 #endif
         }
         UNLOCK (&mem_acct->rec[header->type].lock);
-
+        // 调用的地方应该有控制，如果mem_acct->refcnt迅速变成0，mem_acct将会在free的时候释放内存
         if (GF_ATOMIC_DEC (mem_acct->refcnt) == 0) {
                 FREE (mem_acct);
         }
@@ -386,6 +410,7 @@ free:
  * right thing.  That allows type-specific behavior without creating the kind
  * of fragile coupling that we have now.
  */
+// ptr指向的内存是什么type的
 int
 gf_get_mem_type (void *ptr)
 {
@@ -397,6 +422,7 @@ gf_get_mem_type (void *ptr)
         header = (struct mem_header *) (ptr - GF_MEM_HEADER_SIZE);
 
         /* Possible corruption, assert here */
+        // 可能的损坏，在这里断言
         GF_ASSERT (GF_MEM_HEADER_MAGIC == header->magic);
 
         return header->type;
@@ -407,6 +433,7 @@ gf_get_mem_type (void *ptr)
 #define POOL_LARGEST    20      /* i.e. 1048576 */
 #define NPOOLS          (POOL_LARGEST - POOL_SMALLEST + 1)
 
+// 线程私有变量pthread_key_t,相当于同名而不同值的全局变量
 static pthread_key_t            pool_key;
 static pthread_mutex_t          pool_lock       = PTHREAD_MUTEX_INITIALIZER;
 static struct list_head         pool_threads;
