@@ -3728,6 +3728,7 @@ gf_thread_cleanup_xint (pthread_t thread)
         return ret;
 }
 
+// 回头看
 int
 gf_thread_create (pthread_t *thread, const pthread_attr_t *attr,
                   void *(*start_routine)(void *), void *arg, const char *name)

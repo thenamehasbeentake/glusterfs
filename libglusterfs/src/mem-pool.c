@@ -616,6 +616,11 @@ mem_pools_preinit (void)
  * no cleanup done by the pool_sweeper thread until mem_pools_init_late() has
  * been called. Calling mem_get() will be possible after this function has
  * setup the basic structures. */
+/*
+使用 mem_pools_init_early() 函数进行基本初始化。 
+在调用 mem_pools_init_late() 之前，pool_sweeper 线程不会进行任何清理。 
+在此函数设置基本结构后，可以调用 mem_get()
+*/
 void
 mem_pools_init_early (void)
 {
@@ -625,9 +630,15 @@ mem_pools_init_early (void)
          * We won't increase init_count here, that is only done when the
          * pool_sweeper thread is started too.
          */
+        /*
+         使用 pthread_key 析构函数在线程退出时进行清理。
+        *
+        * 我们不会在这里增加 init_count，只有在 pool_sweeper 线程也启动时才会增加。
+        */
         if (init_done == GF_MEMPOOL_INIT_PREINIT ||
             init_done == GF_MEMPOOL_INIT_DESTROY) {
                 /* key has not been created yet */
+                // 当每个线程结束时，系统将调用pool_destructor来释放绑定在这个键上的内存块
                 if (pthread_key_create (&pool_key, pool_destructor) != 0) {
                         gf_log ("mem-pool", GF_LOG_CRITICAL,
                                 "failed to initialize mem-pool key");
@@ -646,6 +657,10 @@ mem_pools_init_early (void)
 /* Call mem_pools_init_late() once threading has been configured completely.
  * This prevent the pool_sweeper thread from getting killed once the main()
  * thread exits during deamonizing. */
+/*
+完全配置线程后调用 mem_pools_init_late() 。
+ 这可以防止 pool_sweeper 线程在 main() 线程在 deamonizing 期间退出时被杀死。
+*/
 void
 mem_pools_init_late (void)
 {

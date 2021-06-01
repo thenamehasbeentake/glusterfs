@@ -11,29 +11,33 @@
 #ifndef _LLIST_H
 #define _LLIST_H
 
-
+// 双向链表
 struct list_head {
 	struct list_head *next;
 	struct list_head *prev;
 };
 
-
+// 初始化head，prev和next指向自己
 #define INIT_LIST_HEAD(head) do {			\
 		(head)->next = (head)->prev = head;	\
 	} while (0)
 
-
+// 在head与head->next之间插入new
+// head -> heal->next
+//变成head -> new -> head->next
 static inline void
 list_add (struct list_head *new, struct list_head *head)
 {
+	// new的前驱后继
 	new->prev = head;
 	new->next = head->next;
 
+	// new前后节点的前驱后继
 	new->prev->next = new;
 	new->next->prev = new;
 }
 
-
+// 在head->pre和head之间插入new
 static inline void
 list_add_tail (struct list_head *new, struct list_head *head)
 {
@@ -51,6 +55,7 @@ list_add_tail (struct list_head *new, struct list_head *head)
     0: if both the arguments are equal
    >0: if first argument is greater than second argument
    <0: if first argument is less than second argument */
+// 从head往前遍历，找到第一个符合compare(new, pos) >= 0，在pos后面插入new
 static inline void
 list_add_order (struct list_head *new, struct list_head *head,
                 int (*compare)(struct list_head *, struct list_head *))
