@@ -38,6 +38,7 @@ list_add (struct list_head *new, struct list_head *head)
 }
 
 // 在head->pre和head之间插入new
+// 为什么是add tail， 因为head的前一个就是tail
 static inline void
 list_add_tail (struct list_head *new, struct list_head *head)
 {
@@ -56,6 +57,9 @@ list_add_tail (struct list_head *new, struct list_head *head)
    >0: if first argument is greater than second argument
    <0: if first argument is less than second argument */
 // 从head往前遍历，找到第一个符合compare(new, pos) >= 0，在pos后面插入new
+// 双向链表，head可以为链表头，这样就相当于从链表尾部开始向前遍历
+// 如果compre函数返回值一直<0,遍历一圈回到head，整个函数将变成list_add(new, head)
+// 所有说如果链表是有序的，head最好为链表中最大值且向前遍历递减(或者说head值无效？？)，否则当new小于链表最小值，会导致插入head和head->next之间使链表变为无序 
 static inline void
 list_add_order (struct list_head *new, struct list_head *head,
                 int (*compare)(struct list_head *, struct list_head *))
@@ -75,9 +79,12 @@ list_add_order (struct list_head *new, struct list_head *head,
         list_add (new, pos);
 }
 
+// 删除当前节点
+// 被删除节点后继0xbabebabe,后继0xcafecafe
 static inline void
 list_del (struct list_head *old)
 {
+	// 更新当前节点前驱的后继和后继的前驱
 	old->prev->next = old->next;
 	old->next->prev = old->prev;
 
@@ -85,7 +92,8 @@ list_del (struct list_head *old)
 	old->prev = (void *)0xcafecafe;
 }
 
-
+// 删除并初始化节点
+// 被删除节点前驱后继更新为自己
 static inline void
 list_del_init (struct list_head *old)
 {
@@ -96,7 +104,7 @@ list_del_init (struct list_head *old)
 	old->prev = old;
 }
 
-
+// 将list从链表中删除，再插入到head之后
 static inline void
 list_move (struct list_head *list, struct list_head *head)
 {
@@ -104,7 +112,7 @@ list_move (struct list_head *list, struct list_head *head)
 	list_add (list, head);
 }
 
-
+// 将list从链表删除，并插入到head之前
 static inline void
 list_move_tail (struct list_head *list, struct list_head *head)
 {
@@ -112,25 +120,30 @@ list_move_tail (struct list_head *list, struct list_head *head)
 	list_add_tail (list, head);
 }
 
-
+// 判断链表是否为空
 static inline int
 list_empty (struct list_head *head)
 {
 	return (head->next == head);
 }
 
-
+// list和head在同一条链表上：
+// 将list->pre与head->next拼接成一条链表， head和list->next拼接成一条链，list->pre和list->next分别指向两条链
+// list和head在不同链表上：将两条链表合成一条，list将不处于链表中，可以指向分割前list所在链表的前后
+// 
 static inline void
 __list_splice (struct list_head *list, struct list_head *head)
 {
+	// 将list->pre与head->next连载一起
 	(list->prev)->next = (head->next);
 	(head->next)->prev = (list->prev);
 
+	// 将head->next 与 list->next连在一起
 	(head)->next = (list->next);
 	(list->next)->prev = (head);
 }
 
-
+// 判断list非空再分割
 static inline void
 list_splice (struct list_head *list, struct list_head *head)
 {
@@ -142,6 +155,7 @@ list_splice (struct list_head *list, struct list_head *head)
 
 
 /* Splice moves @list to the head of the list at @head. */
+// 切分list和head，并初始化list为新的链表的头
 static inline void
 list_splice_init (struct list_head *list, struct list_head *head)
 {
@@ -152,7 +166,8 @@ list_splice_init (struct list_head *list, struct list_head *head)
 	INIT_LIST_HEAD (list);
 }
 
-
+// head->prev 和 list->next连接， head与list->prev连接
+// 与__list_splice类似
 static inline void
 __list_append (struct list_head *list, struct list_head *head)
 {
@@ -162,7 +177,7 @@ __list_append (struct list_head *list, struct list_head *head)
         (list->prev)->next = head;
 }
 
-
+// 与list_splice类似
 static inline void
 list_append (struct list_head *list, struct list_head *head)
 {
@@ -184,12 +199,14 @@ list_append_init (struct list_head *list, struct list_head *head)
 	INIT_LIST_HEAD (list);
 }
 
+// 是否是最后一个节点
 static inline int
 list_is_last (struct list_head *list, struct list_head *head)
 {
         return (list->next == head);
 }
 
+// 包含head两个节点
 static inline int
 list_is_singular(struct list_head *head)
 {
@@ -203,6 +220,7 @@ list_is_singular(struct list_head *head)
  *
  * If @old was empty, it will be overwritten.
  */
+// old节点替换为new
 static inline void list_replace(struct list_head *old,
 				struct list_head *new)
 {
@@ -212,6 +230,7 @@ static inline void list_replace(struct list_head *old,
 	new->prev->next = new;
 }
 
+// old节点replace 为new且初始话old
 static inline void list_replace_init(struct list_head *old,
                                      struct list_head *new)
 {
@@ -223,6 +242,7 @@ static inline void list_replace_init(struct list_head *old,
  * list_rotate_left - rotate the list to the left
  * @head: the head of the list
  */
+// head->next移动到head与head->prev之间
 static inline void list_rotate_left (struct list_head *head)
 {
 	struct list_head *first;
@@ -232,16 +252,22 @@ static inline void list_rotate_left (struct list_head *head)
 		list_move_tail (first, head);
 	}
 }
-
+// list的kv属性，传入struct中的某成员的ptr， struct type及该成员指针的变量名
+// 返回该指针所在结构体的指针
 #define list_entry(ptr, type, member)					\
 	((type *)((char *)(ptr)-(unsigned long)(&((type *)0)->member)))
 
+// 遍历list的下一个kv， ptr应该是head，head->next的struct与ptr所在struct可能不是同一个， 所以是第一个
 #define list_first_entry(ptr, type, member)     \
         list_entry((ptr)->next, type, member)
 
+// 遍历list的上一个kv， ptr应该是head，head->next的struct与ptr所在struct可能不是同一个， 所以是最后一个
 #define list_last_entry(ptr, type, member)     \
         list_entry((ptr)->prev, type, member)
 
+// 该pos->member中的变量名字为next
+// pos指针所指结构体有member指针，member指针所指结构体有list_head的变量next, 
+// 返回了pos指针本身？？
 #define list_next_entry(pos, member) \
         list_entry((pos)->member.next, typeof(*(pos)), member)
 
