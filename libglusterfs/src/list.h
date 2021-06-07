@@ -268,33 +268,45 @@ static inline void list_rotate_left (struct list_head *head)
 // 该pos->member中的变量名字为next
 // pos指针所指结构体有member指针，member指针所指结构体有list_head的变量next, 
 // 返回了pos指针本身？？
+// 传入含有list变量，且list结构体变量名为member的原始指针pos， 返回list链表下一个pos
 #define list_next_entry(pos, member) \
         list_entry((pos)->member.next, typeof(*(pos)), member)
 
+// 同上
+// 例子， 获取链表下一个，并赋值
+// rlist->rvec = list_next_entry (rlist->rvec, list);
+// typedef struct rbuf_iovec {
+//         struct iovec iov;
+
+//         struct list_head list;
+// } rbuf_iovec_t;
 #define list_prev_entry(pos, member) \
         list_entry((pos)->member.prev, typeof(*(pos)), member)
 
+// 从head->next开始，直到返回到head，遍历head
 #define list_for_each(pos, head)                                        \
 	for (pos = (head)->next; pos != (head); pos = pos->next)
 
+// head为双向链表头，pos为链表主体所在结构指针，member为head中list结构变量名，遍历双向链表
 #define list_for_each_entry(pos, head, member)				\
 	for (pos = list_entry((head)->next, typeof(*pos), member);	\
 	     &pos->member != (head); 					\
 	     pos = list_entry(pos->member.next, typeof(*pos), member))
 
-
+// 对比list_for_each_entry函数，多了一个临时变量n，next下一个，改遍历中可能会对当前pos做一些插入删除操作，大概
 #define list_for_each_entry_safe(pos, n, head, member)			\
 	for (pos = list_entry((head)->next, typeof(*pos), member),	\
 		n = list_entry(pos->member.next, typeof(*pos), member);	\
 	     &pos->member != (head); 					\
 	     pos = n, n = list_entry(n->member.next, typeof(*n), member))
 
+// 向前遍历
 #define list_for_each_entry_reverse(pos, head, member)                  \
 	for (pos = list_entry((head)->prev, typeof(*pos), member);      \
 	     &pos->member != (head);                                    \
 	     pos = list_entry(pos->member.prev, typeof(*pos), member))
 
-
+// 向前遍历+临时n
 #define list_for_each_entry_safe_reverse(pos, n, head, member)          \
 	for (pos = list_entry((head)->prev, typeof(*pos), member),      \
 	        n = list_entry(pos->member.prev, typeof(*pos), member); \
@@ -306,11 +318,13 @@ static inline void list_rotate_left (struct list_head *head)
  * can't use NULL to check whether you're at the head or tail.  Thus, the
  * address of the head has to be an argument for these macros.
  */
-
+// list结构的缺点: 无法通过判空来判断结束，需要把head传进去来判断是否结束了
+// list的下一个，如果到结尾了，返回空
 #define list_next(ptr, head, type, member)      \
         (((ptr)->member.next == head) ? NULL    \
                                  : list_entry((ptr)->member.next, type, member))
 
+// list的上一个，如果到结尾了返回NULL
 #define list_prev(ptr, head, type, member)      \
         (((ptr)->member.prev == head) ? NULL    \
                                  : list_entry((ptr)->member.prev, type, member))
