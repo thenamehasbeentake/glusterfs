@@ -218,6 +218,7 @@ out:
         return dup_mem;
 }
 
+// 这个地方看pooled_obj_hdr,per_thread_pool_t,per_thread_pool_list之间的关系主要组合、聚合，一对一和一对多
 typedef struct pooled_obj_hdr {
         unsigned long                   magic;
         struct pooled_obj_hdr           *next;
@@ -246,6 +247,9 @@ typedef struct per_thread_pool_list {
          * pool-sweeper thread that the list should be detached and freed after
          * the next time it's swept.
          */
+        // 前两个成员受全局池锁保护。 当线程第一次尝试使用任何池时，我们创建其中一个。 
+        // 我们使用 thr_list 将它链接到全局列表，以便池清除线程可以找到它，并使用 pthread_setspecific 以便该线程可以找到它。 
+        // 当每线程析构函数运行时，我们“毒化”池列表以防止进一步分配。 这也向池清扫器线程发出信号，该列表应该在下次清扫后分离并释放。
         struct list_head        thr_list;
         unsigned int            poison;
         /*
@@ -253,6 +257,7 @@ typedef struct per_thread_pool_list {
          * in the implementation code so we just make it a single-element array
          * here.
          */
+        // 确实有不止一个池，但实际数量隐藏在实现代码中，因此我们在这里只将其设为单元素数组。
         pthread_spinlock_t      lock;
         per_thread_pool_t       pools[1];
 } per_thread_pool_list_t;

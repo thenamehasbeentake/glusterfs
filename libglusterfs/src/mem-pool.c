@@ -431,7 +431,7 @@ gf_get_mem_type (void *ptr)
 
 #define POOL_SMALLEST   7       /* i.e. 128 */
 #define POOL_LARGEST    20      /* i.e. 1048576 */
-#define NPOOLS          (POOL_LARGEST - POOL_SMALLEST + 1)
+#define NPOOLS          (POOL_LARGEST - POOL_SMALLEST + 1)      // 14
 
 // 线程私有变量pthread_key_t,相当于同名而不同值的全局变量
 static pthread_key_t            pool_key;
@@ -469,32 +469,37 @@ static pthread_mutex_t  init_mutex      = PTHREAD_MUTEX_INITIALIZER;
 static unsigned int     init_count      = 0;
 static pthread_t        sweeper_tid;
 
-
+// sweep_state_t *   1:n   pooled_obj_hdr_t*       n:n      per_thread_pool_list_t *
+// 该函数将单个线程池列表中的单个线程池中的冷池回收到state中，再将热池变冷
 void
 collect_garbage (sweep_state_t *state, per_thread_pool_list_t *pool_list)
 {
         unsigned int            i;
         per_thread_pool_t       *pt_pool;
-
+        // pool_list->poison， 线程list中删掉pool_list， 并将pool_list放入state->death_row中
         if (pool_list->poison) {
                 list_del (&pool_list->thr_list);
                 list_add (&pool_list->thr_list, &state->death_row);
                 return;
         }
-
+        // 当前state中冷线程池列表数量超过最大值
         if (state->n_cold_lists >= N_COLD_LISTS) {
                 return;
         }
-
+        // 该log负责 pool_list中线程list和poison
         (void) pthread_spin_lock (&pool_list->lock);
         for (i = 0; i < NPOOLS; ++i) {
+                // 默认只有1个大小，实际上有.....
+                // 使用的时候。。。pt_pool可能会变野指针吗？
                 pt_pool = &pool_list->pools[i];
+                // 冷池回归state， 热池变冷池
                 if (pt_pool->cold_list) {
                         state->cold_lists[state->n_cold_lists++]
                                 = pt_pool->cold_list;
                 }
                 pt_pool->cold_list = pt_pool->hot_list;
                 pt_pool->hot_list = NULL;
+                // state最多放N_COLD_LIST个冷池
                 if (state->n_cold_lists >= N_COLD_LISTS) {
                         /* We'll just catch up on a future pass. */
                         break;
@@ -503,7 +508,7 @@ collect_garbage (sweep_state_t *state, per_thread_pool_list_t *pool_list)
         (void) pthread_spin_unlock (&pool_list->lock);
 }
 
-
+// free pooled_obj_hdr_t list
 void
 free_obj_list (pooled_obj_hdr_t *victim)
 {
@@ -517,6 +522,7 @@ free_obj_list (pooled_obj_hdr_t *victim)
         }
 }
 
+// 池清扫器
 void *
 pool_sweeper (void *arg)
 {
@@ -535,28 +541,43 @@ pool_sweeper (void *arg)
          * global lock.  Thus, we split each iteration into three passes, with
          * only the first and fastest holding the lock.
          */
+        // 这有点不雅，但重点是避免在持有全局锁的同时做昂贵的事情（例如释放数千个对象）。
+        //  因此，我们将每次迭代分为三遍，只有第一个和最快的持有锁。
 
         for (;;) {
-                sleep (POOL_SWEEP_SECS);
+                // https://blog.csdn.net/qq_40399012/article/details/84255522
+                // 休眠30s
+                // 取消点，sleep，wait，waitpid，waitid，send等函数
+                sleep (POOL_SWEEP_SECS); 
+                // 将当前线程取消状态改为PTHREAD_CANCEL_DISABLE,(默认）, 后续调用pthread_cancel将不会杀死线程
                 (void) pthread_setcancelstate (PTHREAD_CANCEL_DISABLE, NULL);
                 INIT_LIST_HEAD (&state.death_row);
                 state.n_cold_lists = 0;
 
                 /* First pass: collect stuff that needs our attention. */
                 (void) gettimeofday (&begin_time, NULL);
+                // pool lock
                 (void) pthread_mutex_lock (&pool_lock);
+                // pool_threads
+                // ??? state刚刚初始化，将pool_list中的冷池清洗到state中，好像没啥问题
                 list_for_each_entry_safe (pool_list, next_pl,
                                           &pool_threads, thr_list) {
                         collect_garbage (&state, pool_list);
                 }
                 (void) pthread_mutex_unlock (&pool_lock);
                 (void) gettimeofday (&end_time, NULL);
+                // 计算时间差
                 timersub (&end_time, &begin_time, &elapsed);
                 sweep_usecs += elapsed.tv_sec * 1000000 + elapsed.tv_usec;
+                // 清洗次数+1
                 sweep_times += 1;
 
                 /* Second pass: free dead pools. */
+                // pool_free_lock
                 (void) pthread_mutex_lock (&pool_free_lock);
+                // 遍历刚才清洗到state.death_row中毒池， state.death_row为链表头但是它到哪儿去了呢？
+                // 指向上面collect_garbage中pool_list为poison的list中
+                // 回来看
                 list_for_each_entry_safe (pool_list, next_pl,
                                           &state.death_row, thr_list) {
                         for (i = 0; i < NPOOLS; ++i) {
@@ -565,20 +586,28 @@ pool_sweeper (void *arg)
                                 free_obj_list (pt_pool->hot_list);
                                 pt_pool->hot_list = pt_pool->cold_list = NULL;
                         }
+                        // 将state.death_row中的毒池成员去掉
                         list_del (&pool_list->thr_list);
+                        // 放入pool_free_threads链表中
                         list_add (&pool_list->thr_list, &pool_free_threads);
                 }
                 (void) pthread_mutex_unlock (&pool_free_lock);
 
                 /* Third pass: free cold objects from live pools. */
+                // 释放state.cold_lists, 这里只是简单的free掉pooled_obj_hdr_t, 真正的线程池在上一步加入到pool_free_threads list中去了
                 for (i = 0; i < state.n_cold_lists; ++i) {
                         free_obj_list (state.cold_lists[i]);
                 }
+                // 将线程cancel状态置为enable
+                // 《unix环境高级编程》
+                // pthread_setcancelstate函数设置为PTHREAD_CANCEL_ENABLE之后，后续调用pthread_cancel才会在之后的取消点有所动作
+                // 否则PTHREAD_CANCEL_DISABLE, 将使线程进入未决状态， 知道再次设置为PTHREAD_CANCEL_ENABLE才会在后续出现的第一个去掉点有所动作
                 (void) pthread_setcancelstate (PTHREAD_CANCEL_ENABLE, NULL);
         }
 }
 
 
+// 析构per_thread_pool_list_t, 将当前的pool_list->poison置为1，后续的pool_sweeper将会释放掉
 void
 pool_destructor (void *arg)
 {
@@ -588,7 +617,8 @@ pool_destructor (void *arg)
         pool_list->poison = 1;
 }
 
-
+// __attribute__ ((constructor)) 将会在main函数执行之前执行
+// 初始化pool 和pool_free_threads
 static __attribute__((constructor)) void
 mem_pools_preinit (void)
 {
@@ -605,7 +635,8 @@ mem_pools_preinit (void)
                 GF_ATOMIC_INIT (pools[i].allocs_stdc, 0);
                 GF_ATOMIC_INIT (pools[i].frees_to_list, 0);
         }
-
+        // pool_list_size 大小为per_thread_pool_list_t + 13个 per_thread_pool_t, 
+        // 即每个per_thread_pool_list初始化的时候初始了14个per_thread_pool_t
         pool_list_size = sizeof (per_thread_pool_list_t)
                        + sizeof (per_thread_pool_t) * (NPOOLS - 1);
 
@@ -639,6 +670,7 @@ mem_pools_init_early (void)
             init_done == GF_MEMPOOL_INIT_DESTROY) {
                 /* key has not been created yet */
                 // 当每个线程结束时，系统将调用pool_destructor来释放绑定在这个键上的内存块
+                // 一键多值
                 if (pthread_key_create (&pool_key, pool_destructor) != 0) {
                         gf_log ("mem-pool", GF_LOG_CRITICAL,
                                 "failed to initialize mem-pool key");
@@ -666,6 +698,7 @@ mem_pools_init_late (void)
 {
         pthread_mutex_lock (&init_mutex);
         if ((init_count++) == 0) {
+                // 创建sweep线程，负责内存池的sweep
                 (void) gf_thread_create (&sweeper_tid, NULL, pool_sweeper,
                                          NULL, "memsweep");
 
@@ -674,6 +707,7 @@ mem_pools_init_late (void)
         pthread_mutex_unlock (&init_mutex);
 }
 
+// 结束memsweep线程,回收pool_thread，pool_free_thread内存
 void
 mem_pools_fini (void)
 {
@@ -689,6 +723,10 @@ mem_pools_fini (void)
                  * leave it running.  Not perfect, but far better than any
                  * known alternative.
                  */
+                // 如果 init_count 已经为零（例如，如果有人在 mem_pools_init_late 之前调用它），那么清扫器可能从未启动过，所以我们不需要停止它。 
+                // 即使有一些疯狂的情况，有一个清扫器但 init_count 仍然为零，那只是意味着我们将让它继续运行。 
+                // 不完美，但比任何已知的替代品都要好得多。
+                // 有加pthread_mutex_lock(&init_mutex)， 看起来问题不大
                 break;
         case 1:
         {
@@ -700,6 +738,8 @@ mem_pools_fini (void)
                  * be invalid and the functions will error out. That is not
                  * critical. In all other cases, the sweeper_tid will be valid
                  * and the thread gets stopped. */
+                // 如果只调用了 mem_pools_init_early()，sweeper_tid 将无效并且函数将出错。 
+                // 这并不重要。 在所有其他情况下，sweeper_tid 将有效并且线程停止
                 (void) pthread_cancel (sweeper_tid);
                 (void) pthread_join (sweeper_tid, NULL);
 
@@ -709,6 +749,9 @@ mem_pools_fini (void)
                  * This also prevents calling pool_destructor() when a thread
                  * exits, so there is no chance on a use-after-free of the
                  * per_thread_pool_list_t structure. */
+                // 需要清理 pool_key 以防止进一步使用为每个线程存储的 per_thread_pool_list_t 结构。 
+                // 这也可以防止在线程退出时调用 pool_destructor()，因此没有机会释放 per_thread_pool_list_t 结构
+                // 对应pthread_key_create
                 (void) pthread_key_delete (pool_key);
 
                 /* free all objects from all pools */
