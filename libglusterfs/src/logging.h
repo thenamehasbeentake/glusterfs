@@ -64,10 +64,10 @@
 #define GF_LOGGER_SYSLOG              "syslog"
 
 typedef enum {
-        GF_LOG_NONE,
-        GF_LOG_EMERG,
-        GF_LOG_ALERT,
-        GF_LOG_CRITICAL,   /* fatal errors */
+        GF_LOG_NONE,            // 无
+        GF_LOG_EMERG,           // 紧急
+        GF_LOG_ALERT,           // 警报, 告警
+        GF_LOG_CRITICAL,   /* fatal errors */   // 批评的; 批判性的; 挑剔的; 极重要的; 关键的; 至关紧要的; 严重的; 不稳定的; 可能有危险的;
         GF_LOG_ERROR,      /* major failures (not necessarily fatal) */
         GF_LOG_WARNING,    /* info about normal operation */
         GF_LOG_NOTICE,
