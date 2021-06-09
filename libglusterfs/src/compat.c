@@ -27,7 +27,8 @@
 #include "syscall.h"
 #include "run.h"
 #include "libglusterfs-messages.h"
-
+// UNIX环境编程
+// 回来看
 #ifdef GF_SOLARIS_HOST_OS
 int
 solaris_fsetxattr(int fd, const char* key, const char *value, size_t size,

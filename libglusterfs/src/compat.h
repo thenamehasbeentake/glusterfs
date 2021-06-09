@@ -7,7 +7,7 @@
   later), or the GNU General Public License, version 2 (GPLv2), in all
   cases as published by the Free Software Foundation.
 */
-
+// compat兼容性
 #ifndef __COMPAT_H__
 #define __COMPAT_H__
 
