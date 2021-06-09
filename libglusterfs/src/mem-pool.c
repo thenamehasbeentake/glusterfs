@@ -434,12 +434,12 @@ gf_get_mem_type (void *ptr)
 #define NPOOLS          (POOL_LARGEST - POOL_SMALLEST + 1)      // 14
 
 // 线程私有变量pthread_key_t,相当于同名而不同值的全局变量
-static pthread_key_t            pool_key;
-static pthread_mutex_t          pool_lock       = PTHREAD_MUTEX_INITIALIZER;
-static struct list_head         pool_threads;
-static pthread_mutex_t          pool_free_lock  = PTHREAD_MUTEX_INITIALIZER;
-static struct list_head         pool_free_threads;
-static struct mem_pool          pools[NPOOLS];
+static pthread_key_t            pool_key;                                               // 存放不同线程的pool_list指针
+static pthread_mutex_t          pool_lock       = PTHREAD_MUTEX_INITIALIZER;            // 全局pool_thread锁
+static struct list_head         pool_threads;                                           // 负责记录全局的pool_list
+static pthread_mutex_t          pool_free_lock  = PTHREAD_MUTEX_INITIALIZER;            // 全局pool_free_threads锁
+static struct list_head         pool_free_threads;                                      // 用来记录全局pool_free_threads
+static struct mem_pool          pools[NPOOLS];                                          // 全局mempools
 static size_t                   pool_list_size;
 
 #if !defined(GF_DISABLE_MEMPOOL)
@@ -975,6 +975,7 @@ mem_put (void *ptr)
 #endif /* GF_DISABLE_MEMPOOL */
 }
 
+// 无效函数，pool中对象都会被memsweep线程清理掉
 void
 mem_pool_destroy (struct mem_pool *pool)
 {
@@ -988,4 +989,5 @@ mem_pool_destroy (struct mem_pool *pool)
          * be freed via the pool-sweeper thread, and this way we don't have to
          * add a lot of reference-counting complexity.
          */
+        // All of the objects *in* the pool will eventuall be freed via the pool-sweeper thread
 }
