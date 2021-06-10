@@ -857,6 +857,7 @@ set_stack_size (iot_conf_t *conf)
         this = THIS;
 
         pthread_attr_init (&conf->w_attr);
+        // https://man7.org/linux/man-pages/man3/pthread_attr_getstacksize.3.html
         err = pthread_attr_setstacksize (&conf->w_attr, stacksize);
         if (err == EINVAL) {
                 err = pthread_attr_getstacksize (&conf->w_attr, &stacksize);
@@ -1030,7 +1031,7 @@ init (xlator_t *this)
                         bool, out);
 
         conf->this = this;
-
+        // 四种优先级的链表
         for (i = 0; i < IOT_PRI_MAX; i++) {
                 INIT_LIST_HEAD (&conf->clients[i]);
                 INIT_LIST_HEAD (&conf->no_client[i].clients);
