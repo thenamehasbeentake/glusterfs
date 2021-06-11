@@ -87,12 +87,16 @@ __iot_dequeue (iot_conf_t *conf, int *pri)
                 if (conf->ac_iot_count[i] >= conf->ac_iot_limit[i]) {
                         continue;
                 }
-
+// io-threads：在客户端之间公平地分配工作
+// 这是完整的“队列的队列”方法，每个客户端都可以获取
+// 自己的队列（每个优先级），我们在其中循环。
                 if (list_empty (&conf->clients[i])) {
                         continue;
                 }
 
                 /* Get the first per-client queue for this priority. */
+                // 猜测这里的conf->clients[i]的next为  iot_client_ctx_t结构体中的clients
+                // 这里获取conf->clients[i]所链的第一个iot_client_ctx_t对象的指针
                 ctx = list_first_entry (&conf->clients[i],
                                         iot_client_ctx_t, clients);
                 if (!ctx) {
@@ -103,23 +107,38 @@ __iot_dequeue (iot_conf_t *conf, int *pri)
                         continue;
                 }
 
+                // 猜测这里的&ctx->reqs的next为  call_stub_t结构体中的list
+                // 这里获取ctx->reqs所链的第一个call_stub_t对象的指针
                 /* Get the first request on that queue. */
                 stub = list_first_entry (&ctx->reqs, call_stub_t, list);
                 list_del_init (&stub->list);
+                // 如果ctx只剩下个头指针，就删了ctx->clients
                 if (list_empty (&ctx->reqs)) {
                         list_del_init (&ctx->clients);
                 } else {
+                        // 将conf->clients[i]所指的下一个移动到链表尾
+                        /*
+                         iot_conf_t             iot_client_ctx_t        iot_client_ctx_t
+                         conf->client[i]    ->    clients          ->       clients
+                                                  reqs     ->      call_stub_t          call_stub_t
+                                                                    list        ->        list 
+                        */
+                        // 当前conf->clients[i] i优先级对应了一个clients列表，处理完client链表中的reqs所指的其中一个call_stub_t
+                        // 就将当前clients 放到conf->clients[i]尾
                         list_rotate_left (&conf->clients[i]);
                 }
-
+                // 当前线程要执行了，ac_iot_count++
                 conf->ac_iot_count[i]++;
+                // pri priority，保存一下当前线程执行的那个优先级客户端的请求
                 *pri = i;
                 break;
         }
-
+        // 当前函数有在锁中执行，这里不会出现问题
+        // 理论上stub不会为空，可能加个log比较好
+        // 返回值为空在调用者的地方处理了
         if (!stub)
                 return NULL;
-
+        // 队列和pri优先级的队列被占了一个坑
         conf->queue_size--;
         conf->queue_sizes[*pri]--;
 
@@ -152,7 +171,7 @@ __iot_enqueue (iot_conf_t *conf, call_stub_t *stub, int pri)
                 list_add_tail (&ctx->clients, &conf->clients[pri]);
         }
         list_add_tail (&stub->list, &ctx->reqs);
-
+        // 队列数量+1
         conf->queue_size++;
         conf->queue_sizes[pri]++;
 }
@@ -222,6 +241,7 @@ iot_worker (void *data)
                 }
                 pthread_mutex_unlock (&conf->mutex);
 
+                // wind || unwind
                 if (stub) /* guard against spurious wakeups */          // 防范虚假唤醒
                         call_resume (stub);
                 stub = NULL;
@@ -242,9 +262,9 @@ do_iot_schedule (iot_conf_t *conf, call_stub_t *stub, int pri)
         pthread_mutex_lock (&conf->mutex);
         {
                 __iot_enqueue (conf, stub, pri);
-
+                // iotwr线程可以 干活了
                 pthread_cond_signal (&conf->cond);
-
+                // iotwr线程超过idle时间后会结束，这里补充新的线程
                 ret = __iot_workers_scale (conf);
         }
         pthread_mutex_unlock (&conf->mutex);

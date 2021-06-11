@@ -76,7 +76,7 @@ struct iot_conf {
         iot_client_ctx_t     no_client[IOT_PRI_MAX];
 
         int32_t              ac_iot_limit[IOT_PRI_MAX];         // 线程数的限制，option里面取
-        int32_t              ac_iot_count[IOT_PRI_MAX];
+        int32_t              ac_iot_count[IOT_PRI_MAX];         // 当前线程数
         int                  queue_sizes[IOT_PRI_MAX];
         int                  queue_size;
         pthread_attr_t       w_attr;
