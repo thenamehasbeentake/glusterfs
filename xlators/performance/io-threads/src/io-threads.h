@@ -55,14 +55,14 @@ typedef struct {
 } iot_client_ctx_t;
 
 struct iot_conf {
-        pthread_mutex_t      mutex;
+        pthread_mutex_t      mutex;             // 修改conf变量的锁， ac_iot_limit
         pthread_cond_t       cond;
 
         int32_t              max_count;   /* configured maximum */
-        int32_t              curr_count;  /* actual number of threads running */
+        int32_t              curr_count;  /* actual number of threads running */        // 当前运行的线程数，创建完线程返回0再++
         int32_t              sleep_count;
 
-        int32_t              idle_time;   /* in seconds */
+        int32_t              idle_time;   /* in seconds */      // 空闲时间，option取出
 
         struct list_head     clients[IOT_PRI_MAX];
         /*
@@ -75,16 +75,16 @@ struct iot_conf {
         //  我们没有尝试更新所有此类调用者，而是使用它来将它们排入队列。
         iot_client_ctx_t     no_client[IOT_PRI_MAX];
 
-        int32_t              ac_iot_limit[IOT_PRI_MAX];
+        int32_t              ac_iot_limit[IOT_PRI_MAX];         // 线程数的限制，option里面取
         int32_t              ac_iot_count[IOT_PRI_MAX];
         int                  queue_sizes[IOT_PRI_MAX];
         int                  queue_size;
         pthread_attr_t       w_attr;
-        gf_boolean_t         least_priority; /*Enable/Disable least-priority */
+        gf_boolean_t         least_priority; /*Enable/Disable least-priority */ // option取出
 
         xlator_t            *this;
         size_t               stack_size;        // w_attr绑定 线程的栈大小
-        gf_boolean_t         down; /*PARENT_DOWN event is notified*/
+        gf_boolean_t         down; /*PARENT_DOWN event is notified*/            // 配置文件中selinux在io-threads上一层
         gf_boolean_t         mutex_inited;      // mutex是否初始化
         gf_boolean_t         cond_inited;       // cond是否初始化
 };

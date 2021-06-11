@@ -157,7 +157,8 @@ __iot_enqueue (iot_conf_t *conf, call_stub_t *stub, int pri)
         conf->queue_sizes[pri]++;
 }
 
-
+// 每次等待idle_time， 如果conf->queue_size且conf->down，广播唤醒其他线程线程并结束；如果超时结束该线程
+// 
 void *
 iot_worker (void *data)
 {
@@ -202,6 +203,7 @@ iot_worker (void *data)
                         }
 
                         if (bye) {
+                                // conf->curr_count > IOT_MIN_THREADS 当前线程不是最后一个iotwr线程
                                 if (conf->down || conf->curr_count > IOT_MIN_THREADS) {
                                         conf->curr_count--;
                                         if (conf->curr_count == 0)
@@ -220,7 +222,7 @@ iot_worker (void *data)
                 }
                 pthread_mutex_unlock (&conf->mutex);
 
-                if (stub) /* guard against spurious wakeups */
+                if (stub) /* guard against spurious wakeups */          // 防范虚假唤醒
                         call_resume (stub);
                 stub = NULL;
 
@@ -790,28 +792,29 @@ __iot_workers_scale (iot_conf_t *conf)
         int       ret = 0;
         int       i = 0;
         char      thread_name[GF_THREAD_NAMEMAX] = {0,};
-
+        // scala 为四种优先级线程数的和，如果队列大小小于优先级，则改为队列和
         for (i = 0; i < IOT_PRI_MAX; i++)
                 scale += min (conf->queue_sizes[i], conf->ac_iot_limit[i]);
-
+        // scala最小值
         if (scale < IOT_MIN_THREADS)
                 scale = IOT_MIN_THREADS;
-
+        // scala最大值
         if (scale > conf->max_count)
                 scale = conf->max_count;
-
+        // 当前线程数小于线程数的范围，diff必然大于或等于0
         if (conf->curr_count < scale) {
                 diff = scale - conf->curr_count;
         }
-
+        // 线程数太少了，新建线程
         while (diff) {
                 diff --;
-
+                // iotwr iothread write read？
                 snprintf (thread_name, sizeof(thread_name),
                           "%s%d", "iotwr", conf->curr_count);
                 ret = gf_thread_create (&thread, &conf->w_attr, iot_worker,
                                         conf, thread_name);
                 if (ret == 0) {
+                        // 创建成功，当前线程数+1
                         conf->curr_count++;
                         gf_msg_debug (conf->this->name, 0,
                                       "scaled threads to %d (queue_size=%d/%d)",
