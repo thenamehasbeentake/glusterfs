@@ -58,7 +58,7 @@ struct iot_conf {
         pthread_mutex_t      mutex;             // 修改conf变量的锁， ac_iot_limit
         pthread_cond_t       cond;
 
-        int32_t              max_count;   /* configured maximum */
+        int32_t              max_count;   /* configured maximum */                      // 最多的线程数，配置文件可以更改
         int32_t              curr_count;  /* actual number of threads running */        // 当前运行的线程数，创建完线程返回0再++
         int32_t              sleep_count;
 
