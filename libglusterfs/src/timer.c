@@ -19,18 +19,19 @@
 static gf_timer_registry_t *
 gf_timer_registry_init (glusterfs_ctx_t *);
 
+// 新建timer链进ctx->timer
 gf_timer_t *
-gf_timer_call_after (glusterfs_ctx_t *ctx,
-                     struct timespec delta,
-                     gf_timer_cbk_t callbk,
-                     void *data)
+gf_timer_call_after (glusterfs_ctx_t *ctx,      // 取出ctx->timer(gf_timer_registry_t),在其中的active链表里面加入新建的gf_timer_t
+                     struct timespec delta,     // 延迟时间，精确到纳秒
+                     gf_timer_cbk_t callbk,     // 超时回调函数
+                     void *data)                // 超时回调函数参数
 {
         gf_timer_registry_t *reg = NULL;
         gf_timer_t *event = NULL;
         gf_timer_t *trav = NULL;
         uint64_t at = 0;
 
-        if ((ctx == NULL) || (ctx->cleanup_started))
+        if ((ctx == NULL) || (ctx->cleanup_started))    // cleanup_started， 可能是清除ctx的标识
         {
                 gf_msg_callingfn ("timer", GF_LOG_ERROR, EINVAL,
                                   LG_MSG_INVALID_ARG, "Either ctx is NULL or"
@@ -58,11 +59,11 @@ gf_timer_call_after (glusterfs_ctx_t *ctx,
         event->xl = THIS;
         LOCK (&reg->lock);
         {
-                list_for_each_entry_reverse (trav, &reg->active, list) {
+                list_for_each_entry_reverse (trav, &reg->active, list) {        // active链表按照时间从小到大插入，反序遍历，找到第一个时间
                         if (TS (trav->at) < at)
                                 break;
                 }
-                list_add (&event->list, &trav->list);
+                list_add (&event->list, &trav->list);                   // 在适当的位置插入新建的timer任务
         }
         UNLOCK (&reg->lock);
         return event;
@@ -107,14 +108,17 @@ gf_timer_call_cancel (glusterfs_ctx_t *ctx,
 
         LOCK (&reg->lock);
         {
+                // 已经执行了，就不能取消了
                 fired = event->fired;
                 if (fired)
                         goto unlock;
+                // 还没执行，从链表中删除。修改fired值与这个是同一个锁
+                // 不过可能还没执行cbk，仅仅改变了fire值，但是还是没法取消
                 list_del (&event->list);
         }
 unlock:
         UNLOCK (&reg->lock);
-
+        // 还没执行释放资源
         if (!fired) {
                 GF_FREE (event);
                 return 0;
@@ -122,7 +126,7 @@ unlock:
         return -1;
 }
 
-
+// timer线程， 顺序遍历双向链表，取出超时timer，执行cbk，释放timer资源
 static void *
 gf_timer_proc (void *data)
 {
@@ -131,27 +135,28 @@ gf_timer_proc (void *data)
         gf_timer_t *event = NULL;
         gf_timer_t *tmp = NULL;
         xlator_t   *old_THIS = NULL;
-
+        // 初始时未赋值reg->fin
         while (!reg->fin) {
                 uint64_t now;
                 struct timespec now_ts;
 
                 timespec_now (&now_ts);
-                now = TS (now_ts);
+                now = TS (now_ts);      // 将struct timespec转换成usec LL
                 while (1) {
                         uint64_t at;
-                        char need_cbk = 0;
+                        char need_cbk = 0;      // 有timer timeout
 
                         LOCK (&reg->lock);
-                        {
+                        {       // 以&reg->active为链表头节点，tmp临时变量，安全遍历&reg->active指向的event类型
                                 list_for_each_entry_safe (event,
                                              tmp, &reg->active, list) {
                                         at = TS (event->at);
                                         if (now >= at) {
                                                 need_cbk = 1;
+                                                // event->fired ， 该event可以触发
                                                 event->fired = _gf_true;
-                                                list_del (&event->list);
-                                                break;
+                                                list_del (&event->list);        // 遍历到的当前event退出链表
+                                                break;                          // 退出遍历，list_for_宏是一个for循环
                                         }
                                 }
                         }
@@ -159,21 +164,22 @@ gf_timer_proc (void *data)
                         if (need_cbk) {
                                 old_THIS = NULL;
                                 if (event->xl) {
-                                        old_THIS = THIS;
+                                        old_THIS = THIS;        // 暂存当前xlator
                                         THIS = event->xl;
                                 }
-                                event->callbk (event->data);
-                                GF_FREE (event);
-                                if (old_THIS) {
+                                event->callbk (event->data);    // 触发回调函数
+                                GF_FREE (event);                // 释放event资源
+                                if (old_THIS) {                 // 回退当前xlator
                                         THIS = old_THIS;
                                 }
                         } else {
+                                // 没有timer超时就跳出循环，nanosleep 1s
                                 break;
                         }
                 }
-                nanosleep (&sleepts, NULL);
+                nanosleep (&sleepts, NULL);     // 纳秒为单位的sleep，回来看
         }
-
+        // fin, 释放timer资源
         LOCK (&reg->lock);
         {
                 /* Do not call gf_timer_call_cancel(),
@@ -190,7 +196,9 @@ gf_timer_proc (void *data)
         return NULL;
 }
 
-
+// 初始化 glusterfs_ctx_t中的timer指针， 先malloc，后赋值。用的ctx->lock
+// calloc gf_timer_registery_t类型的指针，初始化lock，active链表
+// 创建timer线程，线程调用 gf_timer_proc
 static gf_timer_registry_t *
 gf_timer_registry_init (glusterfs_ctx_t *ctx)
 {
@@ -240,6 +248,7 @@ gf_timer_registry_destroy (glusterfs_ctx_t *ctx)
                 return;
 
         thr_id = reg->th;
+        // ctx->timer->fin = 1, 线程nanosleep之后就退出了
         reg->fin = 1;
         pthread_join (thr_id, NULL);
         GF_FREE (reg);

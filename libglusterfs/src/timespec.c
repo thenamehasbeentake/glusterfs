@@ -21,7 +21,7 @@ static mach_timebase_info_data_t gf_timebase;
 #include "logging.h"
 #include "timespec.h"
 #include "libglusterfs-messages.h"
-
+// 获取当前时间
 void timespec_now (struct timespec *ts)
 {
 #if defined GF_LINUX_HOST_OS || defined GF_SOLARIS_HOST_OS || defined GF_BSD_HOST_OS
@@ -53,14 +53,14 @@ void timespec_now (struct timespec *ts)
 
 #endif /* Platform verification */
 }
-
+// ts的时间增加delta
 void timespec_adjust_delta (struct timespec *ts, struct timespec delta)
 {
         ts->tv_nsec = ((ts->tv_nsec + delta.tv_nsec) % 1000000000);
         ts->tv_sec += ((ts->tv_nsec + delta.tv_nsec) / 1000000000);
         ts->tv_sec += delta.tv_sec;
 }
-
+// res = end - begin
 void timespec_sub (const struct timespec *begin, const struct timespec *end,
                    struct timespec *res)
 {
