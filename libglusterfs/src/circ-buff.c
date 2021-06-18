@@ -10,7 +10,7 @@
 
 #include "circ-buff.h"
 #include "libglusterfs-messages.h"
-
+// 调用destroy_buffer_data， 清除前最后的倔强， 再free掉cb->data
 void
 cb_destroy_data (circular_buffer_t *cb,
                  void (*destroy_buffer_data) (void *data))
@@ -21,7 +21,7 @@ cb_destroy_data (circular_buffer_t *cb,
         return;
 }
 
-
+// buffer中加入circular_buffer, data指向item
 /* hold lock while calling this function */
 int
 __cb_add_entry_buffer (buffer_t *buffer, void *item)
@@ -30,13 +30,13 @@ __cb_add_entry_buffer (buffer_t *buffer, void *item)
         int    ret   = -1;
         //DO we really need the assert here?
         GF_ASSERT (buffer->used_len <= buffer->size_buffer);
-
+        // 只用一次并且写满了
         if (buffer->use_once == _gf_true &&
             buffer->used_len == buffer->size_buffer) {
                 gf_msg  ("circ-buff", GF_LOG_WARNING, 0, LG_MSG_BUFFER_ERROR,
                          "buffer %p is use once buffer", buffer);
                 return -1;
-        } else {
+        } else {        // 写满了释放再calloc
                 if (buffer->used_len == buffer->size_buffer) {
                         if (buffer->cb[buffer->w_index]) {
                                 ptr = buffer->cb[buffer->w_index];
@@ -72,7 +72,7 @@ __cb_add_entry_buffer (buffer_t *buffer, void *item)
                 return buffer->w_index;
         }
 }
-
+// add entry buffer
 int
 cb_add_entry_buffer (buffer_t *buffer, void *item)
 {
@@ -86,7 +86,7 @@ cb_add_entry_buffer (buffer_t *buffer, void *item)
 
         return write_index;
 }
-
+// debug的log
 void
 cb_buffer_show (buffer_t *buffer)
 {
@@ -144,7 +144,7 @@ cb_buffer_dump (buffer_t *buffer, void *data,
         }
         pthread_mutex_unlock (&buffer->lock);
 }
-
+// callo  buffer_t*，buffer->cb 并返回。
 buffer_t *
 cb_buffer_new (size_t buffer_size, gf_boolean_t use_once,
                void (*destroy_buffer_data) (void *data))
@@ -175,7 +175,7 @@ cb_buffer_new (size_t buffer_size, gf_boolean_t use_once,
 out:
         return buffer;
 }
-
+// 释放buffer资源，不过这里没有加锁，为什么呢
 void
 cb_buffer_destroy (buffer_t *buffer)
 {
@@ -185,7 +185,7 @@ cb_buffer_destroy (buffer_t *buffer)
                 if (buffer->cb) {
                         for (i = 0; i < buffer->used_len ; i++) {
                                 ptr = buffer->cb[i];
-                                if (ptr->data) {
+                                if (ptr->data) {        // 清除circular_buffer_t
                                         cb_destroy_data (ptr,
                                                    buffer->destroy_buffer_data);
                                         ptr->data = NULL;

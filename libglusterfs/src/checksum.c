@@ -21,14 +21,15 @@
  */
 uint32_t
 gf_rsync_weak_checksum (unsigned char *buf, size_t len)
-{
-        return adler32 (0, buf, len);
+{       // Adler-32校验和是广泛使用的zlib压缩库的一部分，因为两者都是由马克·阿德勒开发的。在rsync工具中使用了Adler-32的“旋转哈希”版本。
+        return adler32 (0, buf, len);   // 校验算法，滚动哈希，可靠性
 }
 
 
 /*
  * The "strong" checksum required for the rsync algorithm.
  */
+// MD5消息摘要算法
 void
 gf_rsync_strong_checksum (unsigned char *data, size_t len, unsigned char *md5)
 {
