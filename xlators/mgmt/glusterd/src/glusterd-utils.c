@@ -11744,7 +11744,7 @@ glusterd_handle_node_rsp (dict_t *req_dict, void *pending_entry,
         gf_msg_debug ("glusterd", 0, "Returning %d", ret);
         return ret;
 }
-
+// 将当前glusterd xlator private中的uuid设置为originator_uuid
 int32_t
 glusterd_set_originator_uuid (dict_t *dict)
 {

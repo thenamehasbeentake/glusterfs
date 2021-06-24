@@ -150,7 +150,7 @@ glusterd_txn_opinfo_init (glusterd_op_info_t  *opinfo,
         glusterd_conf_t *conf = NULL;
 
         GF_ASSERT (opinfo);
-
+        // THIS在glusterd这一层
         conf = THIS->private;
         GF_ASSERT (conf);
 
@@ -254,7 +254,7 @@ out:
         gf_msg_debug (this->name, 0, "Returning %d", ret);
         return ret;
 }
-
+// calloc一个glusterd_txn_opinfo_obj结构体， 字典中对 txn_id存入opinfo的value值，
 int32_t
 glusterd_set_txn_opinfo (uuid_t *txn_id, glusterd_op_info_t  *opinfo)
 {
@@ -4563,7 +4563,7 @@ glusterd_op_build_payload (dict_t **req, char **op_errstr, dict_t *op_ctx)
                                 "operation ctx");
                         goto out;
                 }
-
+                // volname == all???
                 if (strcasecmp (volname, "all")) {
                         ret = glusterd_dict_set_volid (dict,
                                                        volname,
@@ -5283,7 +5283,7 @@ glusterd_op_ac_send_commit_op (glusterd_op_sm_event_t *event, void *ctx)
                 opinfo.op_errstr = op_errstr;
                 goto out;
         }
-
+        // response
         ret = glusterd_op_commit_perform (op, dict, &op_errstr, NULL); //rsp_dict invalid for source
         if (ret) {
                 gf_msg (this->name, GF_LOG_ERROR, 0,
@@ -5899,7 +5899,7 @@ glusterd_op_ac_commit_op (glusterd_op_sm_event_t *event, void *ctx)
                  * originator glusterd*/
                 status = 0;
 
-        } else {
+        } else {        // accept?
                 status = glusterd_op_commit_perform (req_ctx->op, dict,
                                                      &op_errstr, rsp_dict);
         }
@@ -6205,7 +6205,7 @@ glusterd_op_commit_perform (glusterd_op_t op, dict_t *dict, char **op_errstr,
                         ret = glusterd_op_stats_volume (dict, op_errstr,
                                                         rsp_dict);
                         break;
-
+                // quotad process spawn heal
                 case GD_OP_QUOTA:
                         ret = glusterd_op_quota (dict, op_errstr, rsp_dict);
                         break;

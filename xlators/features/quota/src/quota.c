@@ -5345,7 +5345,7 @@ struct volume_options options[] = {
           .type = GF_OPTION_TYPE_TIME,
           .min = 0,
           .max = 7*86400,
-          .default_value = "86400",
+          .default_value = "86400",     // 86400s = 24h = 1d, 这个是超过soft-limit的alert level的log
         },
         {.key = {NULL}}
 };

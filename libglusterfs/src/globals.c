@@ -111,7 +111,7 @@ gf_global_mem_acct_enable_get (void)
 {
 	return gf_global_mem_acct_enable;
 }
-
+// enable memory accounting
 int
 gf_global_mem_acct_enable_set (int val)
 {
@@ -141,7 +141,7 @@ int
 glusterfs_this_init ()
 {
         int  ret = 0;
-
+        // this_xlator_key，线程结束时释放掉
         ret = pthread_key_create (&this_xlator_key, glusterfs_this_destroy);
         if (ret != 0) {
                 gf_msg ("", GF_LOG_WARNING, ret,
@@ -399,12 +399,12 @@ glusterfs_leaseid_buf_get ()
         }
         return buf;
 }
-
+// pthread_once, 执行一次的初始化
 static void
 gf_globals_init_once ()
 {
         int ret = 0;
-
+        // 初始化this_xlator_key线程私有变量
         ret = glusterfs_this_init ();
         if (ret) {
                 gf_msg ("", GF_LOG_CRITICAL, 0, LG_MSG_TRANSLATOR_INIT_FAILED,

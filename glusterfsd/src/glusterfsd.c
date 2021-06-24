@@ -2449,17 +2449,17 @@ main (int argc, char *argv[])
         int               ret = -1;
         char              cmdlinestr[PATH_MAX] = {0,};
         cmd_args_t       *cmd = NULL;
-
+        // 初始化内存池pool_key线程私有变量
         mem_pools_init_early ();
-
+        // 遍历参数，如果有--no-mem-accounting
 	gf_check_and_set_mem_acct (argc, argv);
-
+        // 初始化glusterfs_ctx_t， 
 	ctx = glusterfs_ctx_new ();
         if (!ctx) {
                 gf_msg ("glusterfs", GF_LOG_CRITICAL, 0, glusterfsd_msg_29);
                 return ENOMEM;
         }
-	glusterfsd_ctx = ctx;
+	glusterfsd_ctx = ctx;   // memory in std calloc
 
         ret = glusterfs_globals_init (ctx);
         if (ret)

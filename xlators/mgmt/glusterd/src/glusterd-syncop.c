@@ -1227,7 +1227,7 @@ gd_lock_op_phase (glusterd_conf_t  *conf, glusterd_op_t op, dict_t *op_ctx,
         synctask_barrier_init((&args));
         peer_cnt = 0;
 
-        rcu_read_lock ();
+        rcu_read_lock ();       // https://liburcu.org/     (find doc)
         cds_list_for_each_entry_rcu (peerinfo, &conf->peers, uuid_list) {
                 /* Only send requests to peers who were available before the
                  * transaction started
@@ -1258,7 +1258,7 @@ gd_lock_op_phase (glusterd_conf_t  *conf, glusterd_op_t op, dict_t *op_ctx,
                 ret = 0;
                 goto out;
         }
-
+        // 协程的brrrier wait, 同步任务屏障等待??
         gd_synctask_barrier_wait((&args), peer_cnt);
 
         if (args.op_ret) {
@@ -1440,7 +1440,7 @@ gd_commit_op_phase (glusterd_op_t op, dict_t *op_ctx, dict_t *req_dict,
                 ret = -1;
                 goto out;
         }
-
+        // op操作具体执行
         ret = glusterd_op_commit_perform (op, req_dict, op_errstr, rsp_dict);
         if (ret) {
                 hostname = "localhost";
@@ -1797,7 +1797,9 @@ out:
                 brick_count);
         return ret;
 }
-
+// glusterd 同步任务开始，这是入口
+// 首先锁住自己的glusterd，再通过Userspace RCU遍历conf->peer，锁住集群中其他节点的glusterd
+// 
 void
 gd_sync_task_begin (dict_t *op_ctx, rpcsvc_request_t * req)
 {
@@ -1831,10 +1833,10 @@ gd_sync_task_begin (dict_t *op_ctx, rpcsvc_request_t * req)
                         "operation");
                 goto out;
         }
-        op = tmp_op;
+        op = tmp_op;    // op(GD_OP_QUOTA)(glusterd_op_t)(17)
 
         /* Generate a transaction-id for this operation and
-         * save it in the dict */
+         * save it in the dict */       // 生成一个该操作的事务id(uuid)并存进字典中,key为transaction_id
         ret = glusterd_generate_txn_id (op_ctx, &txn_id);
         if (ret) {
                 gf_msg (this->name, GF_LOG_ERROR, 0,
@@ -1843,9 +1845,9 @@ gd_sync_task_begin (dict_t *op_ctx, rpcsvc_request_t * req)
                 goto out;
         }
 
-        /* Save opinfo for this transaction with the transaction id */
-        glusterd_txn_opinfo_init (&txn_opinfo, NULL, &op, NULL, NULL);
-        ret = glusterd_set_txn_opinfo (txn_id, &txn_opinfo);
+        /* Save opinfo for this transaction with the transaction id */ 
+                glusterd_txn_opinfo_init (&txn_opinfo, NULL, &op, NULL, NULL);
+        ret = glusterd_set_txn_opinfo (txn_id, &txn_opinfo); // 字典中transaction_id-> txn_id(uuid),  txn_id(uuid)-> op(point)
         if (ret)
                 gf_msg (this->name, GF_LOG_ERROR, 0,
                         GD_MSG_TRANS_OPINFO_SET_FAIL,
@@ -1855,7 +1857,7 @@ gd_sync_task_begin (dict_t *op_ctx, rpcsvc_request_t * req)
                 "Transaction ID : %s", uuid_utoa (*txn_id));
 
         /* Save the MY_UUID as the originator_uuid */
-        ret = glusterd_set_originator_uuid (op_ctx);
+        ret = glusterd_set_originator_uuid (op_ctx);    // 当前glusterd xlator中的uuid，以key为originator_uuid存入字典中
         if (ret) {
                 gf_msg (this->name, GF_LOG_ERROR, 0,
                         GD_MSG_UUID_SET_FAIL,
@@ -1902,7 +1904,8 @@ gd_sync_task_begin (dict_t *op_ctx, rpcsvc_request_t * req)
                         if (!volname)
                                 goto out;
                 }
-
+                // glusterd v3_lock字典中加入volname_vol，v3_lock,值为glusterd的
+                // MYUUID,      glusterd v3_lock_timer字典中加入volname_vol, v3_lock_timer,指向当前glusterd xlator及锁超时回调函数
                 ret = glusterd_mgmt_v3_lock (volname, MY_UUID,
                                              &op_errno, "vol");
                 if (ret) {
@@ -1919,6 +1922,7 @@ gd_sync_task_begin (dict_t *op_ctx, rpcsvc_request_t * req)
 
 global:
         if (is_global) {
+                // volname_global同样操作
                 ret = glusterd_mgmt_v3_lock (global, MY_UUID, &op_errno,
                                              "global");
                 if (ret) {
@@ -1933,14 +1937,14 @@ global:
                         goto out;
                 }
         }
-
+        // 获得glusterd锁
         is_acquired = _gf_true;
 
 local_locking_done:
-
+// 锁成功开始操作， 简单扫一眼下次再仔细看...
         /* If no volname is given as a part of the command, locks will
          * not be held */
-        if (volname || cluster_lock || is_global) {
+        if (volname || cluster_lock || is_global) {     // 整个集群其他peer的glusterd lock操作
                 ret = gd_lock_op_phase (conf, op, op_ctx, &op_errstr, *txn_id,
                                         &txn_opinfo, cluster_lock);
                 if (ret) {
@@ -1969,7 +1973,8 @@ local_locking_done:
         ret = gd_brick_op_phase (op, op_ctx, req_dict, &op_errstr);
         if (ret)
                 goto out;
-
+        // commit的op解析
+        // 具体op 的执行 ***
         ret = gd_commit_op_phase (op, op_ctx, req_dict, &op_errstr,
                                   &txn_opinfo);
         if (ret)
@@ -2020,13 +2025,14 @@ out:
 
         return;
 }
-
+// 协程开始入口
+// WXB 2
 int32_t
 glusterd_op_begin_synctask (rpcsvc_request_t *req, glusterd_op_t op,
                             void *dict)
 {
         int              ret = 0;
-
+        // 设置sync-mgmt-operation值op(GD_OP_QUOTA)(glusterd_op_t)(17)放入字典中
         ret = dict_set_int32 (dict, GD_SYNC_OPCODE_KEY, op);
         if (ret) {
                 gf_msg (THIS->name, GF_LOG_ERROR, 0,

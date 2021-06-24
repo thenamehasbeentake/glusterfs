@@ -475,7 +475,7 @@ out:
         }
 
         return rpc;
-        }
+}
 
 struct rpc_clnt_procedure quota_enforcer_actors[GF_AGGREGATOR_MAXVALUE] = {
         [GF_AGGREGATOR_NULL]     = {"NULL", NULL},

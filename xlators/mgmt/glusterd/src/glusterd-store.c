@@ -4820,7 +4820,7 @@ out:
         gf_store_handle_destroy (shandle);
         return ret;
 }
-
+// 在打开的/var/lib/glusterd/vols/volname/quota.conf中写入版本头QUOTA_CONF_HEADER
 int32_t
 glusterd_quota_conf_write_header (int fd)
 {

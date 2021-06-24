@@ -327,7 +327,7 @@ typedef void (*rpcsvc_deallocate_reply) (void *msg);
 #define RPCSVC_NAME_MAX            32
 /* The descriptor for each procedure/actor that runs
  * over the RPC service.
- */
+ */     // 《通过 Actor 模型实现响应式消息处理模式》？？？
 typedef struct rpcsvc_actor_desc {
         char                    procname[RPCSVC_NAME_MAX];
         int                     procnum;
@@ -346,7 +346,7 @@ typedef struct rpcsvc_actor_desc {
         /* Can actor be ran on behalf an unprivileged requestor? */
         gf_boolean_t            unprivileged;
         drc_op_type_t           op_type;
-} rpcsvc_actor_t;
+} rpcsvc_actor_t;       // IO设计模式：Actor、Reactor、Proactor， 是这个吗？大概不是// 回头看看设计模式
 
 /* Describes a program and its version along with the function pointers
  * required to handle the procedures/actors of each program/version.

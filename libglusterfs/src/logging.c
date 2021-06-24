@@ -665,7 +665,7 @@ gf_syslog (int facility_priority, char *format, ...)
                 syslog (GF_LOG_CRITICAL, "vasprintf() failed, out of memory?");
         va_end (ap);
 }
-
+// 初始化ctx->log
 void
 gf_log_globals_init (void *data, gf_loglevel_t level)
 {
@@ -689,7 +689,7 @@ gf_log_globals_init (void *data, gf_loglevel_t level)
 #ifdef GF_LINUX_HOST_OS
         /* For the 'syslog' output. one can grep 'GlusterFS' in syslog
            for serious logs */
-        openlog ("GlusterFS", LOG_PID, LOG_DAEMON);
+        openlog ("GlusterFS", LOG_PID, LOG_DAEMON);     // 系统log，后续调用syslog,将会打印含有GlusterFS的log
 #endif
 
 }
