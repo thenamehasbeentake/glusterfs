@@ -38,7 +38,7 @@
 #define TIERING_MIGRATION_KEY           "tiering.migration"
 #define DHT_LAYOUT_HASH_INVALID         1
 #define MAX_REBAL_THREADS               sysconf(_SC_NPROCESSORS_ONLN)
-
+//  sysconf(_SC_NPROCESSORS_CONF)返回系统可以使用的核数，但是其值会包括系统中禁用的核的数目，因 此该值并不代表当前系统中可用的核数。而sysconf(_SC_NPROCESSORS_ONLN)的返回值真正的代表了系统 当前可用的核数。
 #define DHT_DIR_STAT_BLOCKS          8
 #define DHT_DIR_STAT_SIZE            4096
 

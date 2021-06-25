@@ -967,6 +967,8 @@ _resolve_username (xlator_t *this, uid_t uid)
 
         /* Prepare our buffer for the uid->username translation */
 #ifdef _SC_GETGR_R_SIZE_MAX
+// https://www.qnx.com/developers/docs/6.5.0SP1.update/com.qnx.doc.neutrino_lib_ref/s/sysconf.html
+// 没找到告辞 If defined (not -1), the maximum size of buffer that you need to supply to getgrgid_r() for any memory that it needs to allocate.
         pwd_buf_len = sysconf (_SC_GETGR_R_SIZE_MAX);
 #else
         pwd_buf_len = -1;
