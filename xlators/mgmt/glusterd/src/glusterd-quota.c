@@ -60,7 +60,7 @@ const char *gd_quota_op_list[GF_QUOTA_OPTION_TYPE_MAX + 1] = {
         [GF_QUOTA_OPTION_TYPE_MAX]                = NULL
 };
 
-
+// 根据不同的gluster版本支持不同的quota操作命令
 gf_boolean_t
 glusterd_is_quota_supported (int32_t type, char **op_errstr)
 {
@@ -135,7 +135,7 @@ __glusterd_handle_quota (rpcsvc_request_t *req)
         GF_ASSERT (this);
         conf = this->private;
         GF_ASSERT (conf);
-
+        // 解码
         ret = xdr_to_generic (req->msg[0], &cli_req, (xdrproc_t)xdr_gf_cli_req);
         if (ret < 0) {
                 //failed to decode msg;
@@ -146,7 +146,7 @@ __glusterd_handle_quota (rpcsvc_request_t *req)
         if (cli_req.dict.dict_len) {
                 /* Unserialize the dictionary */
                 dict  = dict_new ();
-
+                // 反序列化字典
                 ret = dict_unserialize (cli_req.dict.dict_val,
                                         cli_req.dict.dict_len,
                                         &dict);
@@ -161,7 +161,7 @@ __glusterd_handle_quota (rpcsvc_request_t *req)
                         dict->extra_stdfree = cli_req.dict.dict_val;
                 }
         }
-
+        // 获取卷名
         ret = dict_get_str (dict, "volname", &volname);
         if (ret) {
                 snprintf (msg, sizeof (msg), "Unable to get volume name");
@@ -170,7 +170,7 @@ __glusterd_handle_quota (rpcsvc_request_t *req)
                         "while handling quota command");
                 goto out;
         }
-
+        // 获取rpc task的类型
         ret = dict_get_int32 (dict, "type", &type);
         if (ret) {
                 snprintf (msg, sizeof (msg), "Unable to get type of command");
@@ -179,7 +179,7 @@ __glusterd_handle_quota (rpcsvc_request_t *req)
                         "while handling quota command");
                 goto out;
         }
-
+        // 判断gluster的版本是否支持task对于的type
         if (!glusterd_is_quota_supported (type, NULL)) {
                 snprintf (msg, sizeof (msg), "Volume quota failed. The cluster "
                           "is operating at version %d. Quota command"
@@ -188,13 +188,14 @@ __glusterd_handle_quota (rpcsvc_request_t *req)
                 ret = -1;
                 goto out;
         }
-
+        // 协程任务开始执行
         ret = glusterd_op_begin_synctask (req, GD_OP_QUOTA, dict);
 
 out:
         if (ret) {
                 if (msg[0] == '\0')
                         snprintf (msg, sizeof (msg), "Operation failed");
+                // 操作失败，response
                 ret = glusterd_op_send_cli_response (cli_op, ret, 0, req,
                                                      dict, msg);
         }
@@ -720,7 +721,7 @@ out:
                              "unsuccessful", volinfo->volname);
         return ret;
 }
-
+// 具体设置quota limit
 static int
 glusterd_set_quota_limit (char *volname, char *path, char *hard_limit,
                           char *soft_limit, char *key, char **op_errstr)
@@ -737,16 +738,16 @@ glusterd_set_quota_limit (char *volname, char *path, char *hard_limit,
         GF_ASSERT (this);
         priv = this->private;
         GF_ASSERT (priv);
-
+        // quota挂载点
         GLUSTERD_GET_QUOTA_LIMIT_MOUNT_PATH (abspath, volname, path);
-        ret = gf_lstat_dir (abspath, NULL);
+        ret = gf_lstat_dir (abspath, NULL);     // 连接目录处理
         if (ret) {
                 gf_asprintf (op_errstr, "Failed to find the directory %s. "
                              "Reason : %s", abspath, strerror (errno));
                 goto out;
         }
 
-        if (!soft_limit) {
+        if (!soft_limit) {      // 软限制为空，去找链接所指的真实文件
                 ret = sys_lgetxattr (abspath, key, (void *)&existing_limit,
                                      sizeof (existing_limit));
                 if (ret < 0) {
@@ -769,7 +770,7 @@ glusterd_set_quota_limit (char *volname, char *path, char *hard_limit,
                 }
                 new_limit.sl = existing_limit.sl;
 
-        } else {
+        } else {        // char *存放的软限制 80%
                 ret = gf_string2percent (soft_limit, &soft_limit_double);
                 if (ret)
                         goto out;
@@ -783,7 +784,7 @@ glusterd_set_quota_limit (char *volname, char *path, char *hard_limit,
                 goto out;
 
         new_limit.hl = hton64 (new_limit.hl);
-
+        // 设置新的limit
         ret = sys_lsetxattr (abspath, key, (char *)(void *)&new_limit,
                              sizeof (new_limit), 0);
         if (ret == -1) {
@@ -881,17 +882,17 @@ glusterd_find_gfid_match (uuid_t gfid, char gfid_type, unsigned char *buf,
         while (gfid_index != bytes_read) {
                 memcpy ((void *)tmp_buf, (void *)&buf[gfid_index], 16);
                 type = buf[gfid_index + 16];
-
+                // 在现有的配额gfid中找到，且type相同，更新这个值
                 if (!gf_uuid_compare (gfid, tmp_buf) && type == gfid_type) {
                         if (opcode == GF_QUOTA_OPTION_TYPE_REMOVE ||
-                            opcode == GF_QUOTA_OPTION_TYPE_REMOVE_OBJECTS) {
+                            opcode == GF_QUOTA_OPTION_TYPE_REMOVE_OBJECTS) {    // 如果是删除配额，通过memmove将它后面的移到前面来
                                 shift_count = bytes_read - (gfid_index + 17);
                                 memmove ((void *)&buf[gfid_index],
                                          (void *)&buf[gfid_index + 17],
                                          shift_count);
-                                *write_byte_count = bytes_read - 17;
+                                *write_byte_count = bytes_read - 17;    // 操作结束之后 buff中size = 读出总字节数-17
                         } else {
-                                *write_byte_count = bytes_read;
+                                *write_byte_count = bytes_read;         // 否则buff中 size = 读出总字节数
                         }
                         return _gf_true;
                 } else {
@@ -899,11 +900,11 @@ glusterd_find_gfid_match (uuid_t gfid, char gfid_type, unsigned char *buf,
                 }
         }
         if (gfid_index == bytes_read)
-                *write_byte_count = bytes_read;
+                *write_byte_count = bytes_read;         // 没找打 buff中 size = 读出总字节数
 
 out:
 
-        return _gf_false;
+        return _gf_false;       // false表示没找到
 }
 
 /* The function glusterd_copy_to_tmp_file() reads the "remaining" bytes from
@@ -1033,7 +1034,7 @@ out:
 
         return ret;
 }
-
+// quota配置文件的创建、更新等操作
 int
 glusterd_store_quota_config (glusterd_volinfo_t *volinfo, char *path,
                              char *gfid_str, int opcode, char **op_errstr)
@@ -1060,7 +1061,7 @@ glusterd_store_quota_config (glusterd_volinfo_t *volinfo, char *path,
         GF_ASSERT (this);
         conf = this->private;
         GF_ASSERT (conf);
-
+        // 如果没有配置文件就创建 /var/li/glusterd/vols/volname/quota.conf
         glusterd_store_create_quota_conf_sh_on_absence (volinfo);
 
         conf_fd = open (volinfo->quota_conf_shandle->path, O_RDONLY);
@@ -1068,12 +1069,12 @@ glusterd_store_quota_config (glusterd_volinfo_t *volinfo, char *path,
                 ret = -1;
                 goto out;
         }
-
+        // 读配置文件中头里面的version 1.1还是1.2
         ret = quota_conf_read_version (conf_fd, &version);
         if (ret)
                 goto out;
 
-        if (version < 1.2f && conf->op_version >= GD_OP_VERSION_3_7_0) {
+        if (version < 1.2f && conf->op_version >= GD_OP_VERSION_3_7_0) {        // 版本与配置文件不一致，升级版本的情况
                 /* Upgrade quota.conf file to newer format */
                 sys_close (conf_fd);
                 conf_fd = -1;
@@ -1092,7 +1093,7 @@ glusterd_store_quota_config (glusterd_volinfo_t *volinfo, char *path,
                         ret = -1;
                         goto out;
                 }
-
+                // 这里conf_fd已经跳过头了，lseek操作
                 ret = quota_conf_skip_header (conf_fd);
                 if (ret)
                         goto out;
@@ -1108,20 +1109,21 @@ glusterd_store_quota_config (glusterd_volinfo_t *volinfo, char *path,
         if (conf->op_version >= GD_OP_VERSION_3_7_0)
                 quota_conf_line_sz++;
 
-        buf_sz = quota_conf_line_sz * 1000;
+        buf_sz = quota_conf_line_sz * 1000;     // 17000
 
         buf = GF_CALLOC(buf_sz, 1, gf_common_mt_char);
         if (!buf) {
                 ret = -1;
                 goto out;
         }
-
+        // open创建一个/var/li/glusterd/vols/volname/quota.conf.tmp文件
         fd = gf_store_mkstemp (volinfo->quota_conf_shandle);
         if (fd < 0) {
                 ret = -1;
                 goto out;
         }
-
+        // 向临时文件fd中写入 表示版本的头 GlusterFS Quota conf | version: v1.2\n
+        // 头的size 是36个BYTES+一个0x0a('\n')
         ret = glusterd_quota_conf_write_header (fd);
         if (ret)
                 goto out;
@@ -1138,7 +1140,7 @@ glusterd_store_quota_config (glusterd_volinfo_t *volinfo, char *path,
         if (!gfid_str) {
                 ret = -1;
                 goto out;
-        }
+        }       // 解析传入的gfid参数(这个为配额目录对于的gfid值)
         gf_uuid_parse (gfid_str, gfid);
 
         if (opcode > GF_QUOTA_OPTION_TYPE_VERSION_OBJECTS)
@@ -1147,7 +1149,7 @@ glusterd_store_quota_config (glusterd_volinfo_t *volinfo, char *path,
                 type = GF_QUOTA_CONF_TYPE_USAGE;
 
         for (;;) {
-                bytes_read = sys_read (conf_fd, buf, buf_sz);
+                bytes_read = sys_read (conf_fd, buf, buf_sz);   // 原配置文件(不是头的部分)读入buf中
                 if (bytes_read <= 0) {
                         /*The flag @is_first_read is TRUE when the loop is
                          * entered, and is set to false if the first read
@@ -1157,20 +1159,24 @@ glusterd_store_quota_config (glusterd_volinfo_t *volinfo, char *path,
                          * when 'quota remove' is attempted when there are no
                          * limits set on the given volume.
                          */
-                        if (is_first_read)
+                        if (is_first_read)      // 可能文件很大，这里第一次读如果为空就说明文件中无quota dir的设置
                                 is_file_empty = _gf_true;
                         break;
                 }
-                if ((bytes_read % quota_conf_line_sz) != 0) {
+                if ((bytes_read % quota_conf_line_sz) != 0) {   // 读出来的不是17的倍数？？
+                // 这里是因为gfid长度为16个byte，加上在每个gfid后面加上一个0x01(01表示limit-usage, 02表示limit-object)
+                // 用来分隔，所以后续的内容都是17的倍数
+                // 这里要么就截断了，要么就是没有gfid
                         gf_msg (this->name, GF_LOG_ERROR, 0,
                                 GD_MSG_QUOTA_CONF_CORRUPT, "quota.conf "
                                 "corrupted");
                         ret = -1;
                         goto out;
                 }
+                // 在原有的配额设置中寻找新的gfid配额
                 found = glusterd_find_gfid_match (gfid, type, buf, bytes_read,
                                                   opcode, &bytes_to_write);
-
+                // 将修改过quota.conf中读出来的buf，写入quota.conf.tmp中
                 ret = sys_write (fd, (void *) buf, bytes_to_write);
                 if (ret == -1) {
                         gf_msg (this->name, GF_LOG_ERROR, errno,
@@ -1183,7 +1189,7 @@ glusterd_store_quota_config (glusterd_volinfo_t *volinfo, char *path,
                  * quota.conf into quota.conf.tmp and break.
                  * Else continue with the search.
                  */
-                if (found) {
+                if (found) {    // 如果找到了，把quota.conf中剩下没读完的，循环读出来再写到quota.conf.tmp中
                         ret = glusterd_copy_to_tmp_file (conf_fd, fd,
                                                          quota_conf_line_sz);
                         if (ret)
@@ -1192,7 +1198,7 @@ glusterd_store_quota_config (glusterd_volinfo_t *volinfo, char *path,
                 }
                 is_first_read = _gf_false;
         }
-
+        // 四种op，容量限制，数量限制，
         switch (opcode) {
         case GF_QUOTA_OPTION_TYPE_LIMIT_USAGE:
                 if (!found) {
@@ -1247,7 +1253,7 @@ glusterd_store_quota_config (glusterd_volinfo_t *volinfo, char *path,
                 ret = 0;
                 break;
         }
-
+        // 有修改 quota_conf_version+1
         if (modified)
                 glusterd_update_quota_conf_version (volinfo);
 
@@ -1263,16 +1269,16 @@ out:
         if (ret && (fd > 0)) {
                 gf_store_unlink_tmppath (volinfo->quota_conf_shandle);
         } else if (!ret && GF_QUOTA_OPTION_TYPE_UPGRADE != opcode) {
-                ret = gf_store_rename_tmppath (volinfo->quota_conf_shandle);
+                ret = gf_store_rename_tmppath (volinfo->quota_conf_shandle);    //刷盘文件 重命名 再刷目录
                 if (modified) {
-                        ret = glusterd_compute_cksum (volinfo, _gf_true);
+                        ret = glusterd_compute_cksum (volinfo, _gf_true);       // 更新volinfo->quota_conf_cksum
                         if (ret) {
                                 gf_msg (this->name, GF_LOG_ERROR, 0,
                                         GD_MSG_CKSUM_COMPUTE_FAIL, "Failed to "
                                         "compute cksum for quota conf file");
                                 return ret;
                         }
-
+                        // 修改quota.cksum
                         ret = glusterd_store_save_quota_version_and_cksum
                                                                       (volinfo);
                         if (ret)
@@ -1302,7 +1308,7 @@ glusterd_quota_limit_usage (glusterd_volinfo_t *volinfo, dict_t *dict,
         GF_VALIDATE_OR_GOTO (this->name, dict, out);
         GF_VALIDATE_OR_GOTO (this->name, volinfo, out);
         GF_VALIDATE_OR_GOTO (this->name, op_errstr, out);
-
+        // get以下quota功能开了没， 没开？那你配个毛线
         ret = glusterd_check_if_quota_trans_enabled (volinfo);
         if (ret == -1) {
                 *op_errstr = gf_strdup ("Quota is disabled, please enable "
@@ -1316,7 +1322,7 @@ glusterd_quota_limit_usage (glusterd_volinfo_t *volinfo, dict_t *dict,
                         GD_MSG_DICT_GET_FAILED, "Unable to fetch path");
                 goto out;
         }
-        ret = gf_canonicalize_path (path);
+        ret = gf_canonicalize_path (path);      // canonicalize 规范化
         if (ret)
                 goto out;
 
@@ -1360,7 +1366,7 @@ glusterd_quota_limit_usage (glusterd_volinfo_t *volinfo, dict_t *dict,
                         "%s", path);
                 goto out;
         }
-
+        // quota.conf和quota.cksum文件更新
         ret = glusterd_store_quota_config (volinfo, path, gfid_str, opcode,
                                            op_errstr);
         if (ret)
@@ -1551,7 +1557,7 @@ glusterd_quotad_op (int opcode)
         }
         return ret;
 }
-
+// quota操作commit
 int
 glusterd_op_quota (dict_t *dict, char **op_errstr, dict_t *rsp_dict)
 {
@@ -1616,6 +1622,7 @@ glusterd_op_quota (dict_t *dict, char **op_errstr, dict_t *rsp_dict)
 
                 case GF_QUOTA_OPTION_TYPE_LIMIT_USAGE:
                 case GF_QUOTA_OPTION_TYPE_LIMIT_OBJECTS:
+                // 具体配额限制大小和object(数量)
                         ret = glusterd_quota_limit_usage (volinfo, dict, type,
                                                           op_errstr);
                         goto out;
@@ -1936,7 +1943,7 @@ glusterd_create_quota_auxiliary_mount (xlator_t *this, char *volname, int type)
         if (dict_get_str (this->options, "transport.socket.bind-address",
                           &volfileserver) != 0)
                 volfileserver = "localhost";
-
+// WXB quota进程的启动
         synclock_unlock (&priv->big_lock);
         ret = runcmd (SBIN_DIR"/glusterfs",
                       "--volfile-server", volfileserver,

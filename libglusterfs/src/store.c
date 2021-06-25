@@ -89,13 +89,13 @@ gf_store_sync_direntry (char *path)
                 goto out;
 
         pdir = dirname (dir);
-        dirfd = open (pdir, O_RDONLY);
+        dirfd = open (pdir, O_RDONLY);  // 打开目录
         if (dirfd == -1) {
                 gf_msg (this->name, GF_LOG_ERROR, errno, LG_MSG_DIR_OP_FAILED,
                         "Failed to open directory %s.", pdir);
                 goto out;
         }
-
+        // 目录刷盘有啥用呢？？？ 可能是刷元数据
         ret = sys_fsync (dirfd);
         if (ret) {
                 gf_msg (this->name, GF_LOG_ERROR, errno,
@@ -106,7 +106,7 @@ gf_store_sync_direntry (char *path)
         ret = 0;
 out:
         if (dirfd >= 0) {
-                ret = sys_close (dirfd);
+                ret = sys_close (dirfd);        // 关闭目录
                 if (ret) {
                         gf_msg (this->name, GF_LOG_ERROR, errno,
                                 LG_MSG_DIR_OP_FAILED, "Failed to close %s", pdir);
@@ -127,7 +127,7 @@ gf_store_rename_tmppath (gf_store_handle_t *shandle)
 
         GF_VALIDATE_OR_GOTO ("store", shandle, out);
         GF_VALIDATE_OR_GOTO ("store", shandle->path, out);
-
+        // 同步刷盘，数据和元数据
         ret = sys_fsync (shandle->tmp_fd);
         if (ret) {
                 gf_msg (THIS->name, GF_LOG_ERROR, errno, LG_MSG_FILE_OP_FAILED,
@@ -135,14 +135,14 @@ gf_store_rename_tmppath (gf_store_handle_t *shandle)
                 goto out;
         }
         snprintf (tmppath, sizeof (tmppath), "%s.tmp", shandle->path);
-        ret = sys_rename (tmppath, shandle->path);
+        ret = sys_rename (tmppath, shandle->path);      // 重命名
         if (ret) {
                 gf_msg (THIS->name, GF_LOG_ERROR, errno, LG_MSG_FILE_OP_FAILED,
                         "Failed to rename %s to %s", tmppath,
                         shandle->path);
                 goto out;
         }
-
+        // 文件所在目录也刷一下
         ret = gf_store_sync_direntry (tmppath);
 out:
         if (shandle && shandle->tmp_fd >= 0) {
@@ -345,7 +345,7 @@ gf_store_save_value (int fd, char *key, char *value)
         if (dup_fd == -1)
                 goto out;
 
-        fp = fdopen (dup_fd, "a+");
+        fp = fdopen (dup_fd, "a+");     // 为啥换成iso c的api
         if (fp == NULL) {
                 gf_msg (THIS->name, GF_LOG_WARNING, errno,
                         LG_MSG_FILE_OP_FAILED, "fdopen failed.");

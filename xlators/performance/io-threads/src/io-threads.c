@@ -26,6 +26,7 @@ int iot_workers_scale (iot_conf_t *conf);
 int __iot_workers_scale (iot_conf_t *conf);
 struct volume_options options[];
 
+// fop_##name##_stub这个函数的回调函数default_##name##_resume找不到实现，需要留意一下
 #define IOT_FOP(name, frame, this, args ...)                                   \
         do {                                                                   \
                 call_stub_t     *__stub     = NULL;                            \
@@ -74,6 +75,7 @@ iot_get_ctx (xlator_t *this, client_t *client)
         return ctx;
 }
 
+// fop操作出队，先根据
 call_stub_t *
 __iot_dequeue (iot_conf_t *conf, int *pri)
 {
@@ -83,16 +85,21 @@ __iot_dequeue (iot_conf_t *conf, int *pri)
 
         *pri = -1;
         for (i = 0; i < IOT_PRI_MAX; i++) {
-
+                // 当前线程数比限定的线程数还多，这里continue是让这一队线程自生自灭？
+                // 那如果全都限制在16线程，然后修改限制线程参数，这里会continue四次吗？然后导致返回NULL？
                 if (conf->ac_iot_count[i] >= conf->ac_iot_limit[i]) {
                         continue;
                 }
-
+// io-threads：在客户端之间公平地分配工作
+// 这是完整的“队列的队列”方法，每个客户端都可以获取
+// 自己的队列（每个优先级），我们在其中循环。
                 if (list_empty (&conf->clients[i])) {
                         continue;
                 }
 
                 /* Get the first per-client queue for this priority. */
+                // 猜测这里的conf->clients[i]的next为  iot_client_ctx_t结构体中的clients
+                // 这里获取conf->clients[i]所链的第一个iot_client_ctx_t对象的指针
                 ctx = list_first_entry (&conf->clients[i],
                                         iot_client_ctx_t, clients);
                 if (!ctx) {
@@ -103,23 +110,39 @@ __iot_dequeue (iot_conf_t *conf, int *pri)
                         continue;
                 }
 
+                // 猜测这里的&ctx->reqs的next为  call_stub_t结构体中的list
+                // 这里获取ctx->reqs所链的第一个call_stub_t对象的指针
                 /* Get the first request on that queue. */
                 stub = list_first_entry (&ctx->reqs, call_stub_t, list);
                 list_del_init (&stub->list);
+                // 如果ctx只剩下个头指针，就删了ctx->clients
                 if (list_empty (&ctx->reqs)) {
                         list_del_init (&ctx->clients);
                 } else {
+                        // 将conf->clients[i]所指的下一个移动到链表尾
+                        /*
+                         iot_conf_t             iot_client_ctx_t        iot_client_ctx_t
+                         conf->client[i]    ->    clients          ->       clients
+                                                  reqs     ->      call_stub_t          call_stub_t
+                                                                    list        ->        list 
+                        */
+                        // 当前conf->clients[i] i优先级对应了一个clients列表，处理完client链表中的reqs所指的其中一个call_stub_t
+                        // 就将当前clients 放到conf->clients[i]尾
                         list_rotate_left (&conf->clients[i]);
                 }
-
+                // 当前线程要执行了，ac_iot_count++
                 conf->ac_iot_count[i]++;
+                // pri priority，保存一下当前线程执行的那个优先级客户端的请求
                 *pri = i;
                 break;
         }
-
+        // 当前函数有在锁中执行，这里不会出现问题
+        // 理论上stub不会为空，可能加个log比较好
+        // 返回值为空在调用者的地方处理了
         if (!stub)
                 return NULL;
-
+        // 队列和pri优先级的队列被占了一个坑
+        // 出队，队列数-1
         conf->queue_size--;
         conf->queue_sizes[*pri]--;
 
@@ -130,6 +153,7 @@ __iot_dequeue (iot_conf_t *conf, int *pri)
 void
 __iot_enqueue (iot_conf_t *conf, call_stub_t *stub, int pri)
 {
+        // stub->frame->root->client
         client_t                *client = stub->frame->root->client;
         iot_client_ctx_t        *ctx;
 
@@ -152,12 +176,13 @@ __iot_enqueue (iot_conf_t *conf, call_stub_t *stub, int pri)
                 list_add_tail (&ctx->clients, &conf->clients[pri]);
         }
         list_add_tail (&stub->list, &ctx->reqs);
-
+        // 队列数量+1
         conf->queue_size++;
         conf->queue_sizes[pri]++;
 }
 
-
+// 每次等待idle_time， 如果conf->queue_size且conf->down，广播唤醒其他线程线程并结束；如果超时结束该线程
+// 
 void *
 iot_worker (void *data)
 {
@@ -178,10 +203,15 @@ iot_worker (void *data)
 
                 pthread_mutex_lock (&conf->mutex);
                 {
+                        // 如果priority不是-1，说明已经循环过一次了，在这个prioroty的线程数上-1
                         if (pri != -1) {
+                                // 在pri这个有优先级上执行的线程数
                                 conf->ac_iot_count[pri]--;
                                 pri = -1;
                         }
+                        // 工作队列里面为空，没有fop操作，那么等待idle时间
+                        // 考虑到所有的线程公用一把锁。。。这里可能会出现timeout了但是锁被别的线程占用的情况吗？
+
                         while (conf->queue_size == 0) {
                                 if (conf->down) {
                                         bye = _gf_true;/*Avoid sleep*/
@@ -202,8 +232,12 @@ iot_worker (void *data)
                         }
 
                         if (bye) {
+                                // conf->curr_count > IOT_MIN_THREADS 当前线程不是最后一个iotwr线程
                                 if (conf->down || conf->curr_count > IOT_MIN_THREADS) {
+                                        // down或者timeout之后发现自己不是最后一个线程，这个线程即将被回收
+                                        // 当前执行任务的线程-1，这个线程要说再见了
                                         conf->curr_count--;
+                                        // 如果当前执行线程任务线程数没了，发广播
                                         if (conf->curr_count == 0)
                                            pthread_cond_broadcast (&conf->cond);
                                         gf_msg_debug (conf->this->name, 0,
@@ -220,7 +254,8 @@ iot_worker (void *data)
                 }
                 pthread_mutex_unlock (&conf->mutex);
 
-                if (stub) /* guard against spurious wakeups */
+                // wind || unwind
+                if (stub) /* guard against spurious wakeups */          // 防范虚假唤醒
                         call_resume (stub);
                 stub = NULL;
 
@@ -240,10 +275,11 @@ do_iot_schedule (iot_conf_t *conf, call_stub_t *stub, int pri)
         pthread_mutex_lock (&conf->mutex);
         {
                 __iot_enqueue (conf, stub, pri);
-
+                // iotwr线程可以 干活了
                 pthread_cond_signal (&conf->cond);
-
+                // iotwr线程超过idle时间后会结束，这里补充新的线程
                 ret = __iot_workers_scale (conf);
+                //新创建的线程由于conf->mutex会卡一会儿
         }
         pthread_mutex_unlock (&conf->mutex);
 
@@ -780,7 +816,7 @@ iot_setactivelk (call_frame_t *frame, xlator_t *this, loc_t *loc,
         return 0;
 }
 
-
+// 根据线程数量的限制及当前等待队列里面的长度，适当增加线程
 int
 __iot_workers_scale (iot_conf_t *conf)
 {
@@ -790,28 +826,30 @@ __iot_workers_scale (iot_conf_t *conf)
         int       ret = 0;
         int       i = 0;
         char      thread_name[GF_THREAD_NAMEMAX] = {0,};
-
+        // scala 为四种优先级线程数的和，如果队列大小小于优先级，则改为队列和
         for (i = 0; i < IOT_PRI_MAX; i++)
                 scale += min (conf->queue_sizes[i], conf->ac_iot_limit[i]);
-
+        // scala最小值
         if (scale < IOT_MIN_THREADS)
                 scale = IOT_MIN_THREADS;
-
+        // scala最大值
         if (scale > conf->max_count)
                 scale = conf->max_count;
-
+        // 当前线程数小于线程数的范围，diff必然大于或等于0
         if (conf->curr_count < scale) {
                 diff = scale - conf->curr_count;
         }
-
+        // 线程数最小一个，最多conf->max_count个，默认16最多64
+        // 线程数太少了，新建线程
         while (diff) {
                 diff --;
-
+                // iotwr iothread write read？
                 snprintf (thread_name, sizeof(thread_name),
                           "%s%d", "iotwr", conf->curr_count);
                 ret = gf_thread_create (&thread, &conf->w_attr, iot_worker,
                                         conf, thread_name);
                 if (ret == 0) {
+                        // 创建成功，当前线程数+1
                         conf->curr_count++;
                         gf_msg_debug (conf->this->name, 0,
                                       "scaled threads to %d (queue_size=%d/%d)",
@@ -857,6 +895,7 @@ set_stack_size (iot_conf_t *conf)
         this = THIS;
 
         pthread_attr_init (&conf->w_attr);
+        // https://man7.org/linux/man-pages/man3/pthread_attr_getstacksize.3.html
         err = pthread_attr_setstacksize (&conf->w_attr, stacksize);
         if (err == EINVAL) {
                 err = pthread_attr_getstacksize (&conf->w_attr, &stacksize);
@@ -874,7 +913,7 @@ set_stack_size (iot_conf_t *conf)
         conf->stack_size = stacksize;
 }
 
-
+// 诡异， 只malloc了xlator记录内存分配信息的结构体，但是不曾使用？？？
 int32_t
 mem_acct_init (xlator_t *this)
 {
@@ -963,7 +1002,12 @@ out:
 	return ret;
 }
 
-
+// 初始化
+// pthread_cond_init  conf->cond, conf->cond_inited = _gf_true;
+// pthread_mutex_init  conf->mutex, conf->mutex_inited = _gf_true;
+// 设置线程attr属性，栈大小为256k(栈大小最小值16k)
+// 初始化clients链表
+// iot_workers_scale, 初始化线程。如果当前线程数少于一定范围，创建新线程
 int
 init (xlator_t *this)
 {
@@ -1030,7 +1074,7 @@ init (xlator_t *this)
                         bool, out);
 
         conf->this = this;
-
+        // 四种优先级的链表
         for (i = 0; i < IOT_PRI_MAX; i++) {
                 INIT_LIST_HEAD (&conf->clients[i]);
                 INIT_LIST_HEAD (&conf->no_client[i].clients);
@@ -1055,6 +1099,8 @@ out:
 	return ret;
 }
 
+// 线程退出，conf->down = true;该xlator生命周期结束的时候退出线程
+// 发送广播给所有cond信号量，当当前线程数不为0的时候，等待其他线程的退出
 static void
 iot_exit_threads (iot_conf_t *conf)
 {
@@ -1064,11 +1110,19 @@ iot_exit_threads (iot_conf_t *conf)
                 /*Let all the threads know that xl is going down*/
                 pthread_cond_broadcast (&conf->cond);
                 while (conf->curr_count)/*Wait for threads to exit*/
+                        // 可能会有这样的情景，发送广播的时候iotwr线程没有进入wait状态
+                        // 这个地方exit_threads函数通过调用pthread_cond_wait函数，解锁并等待其他线程的信号。
+                        // 由于conf->down，所有经历过wait的函数都会一路向下知道发送广播并退出。
+                        // 执行在wait之前的线程由于之前被conf_mutex锁住了，这个时候不太确定这里的pthread_cond_wait之后是wait的线程获得锁还是被最前面conf->mutex锁住的线程获得锁
+                        // 每次要退出的线程发送广播，这里的pthread_cond_wait函数就有几率获得锁，然后循环一下在继续pthread_cond_wait。并不会获得锁，iotwr线程本体被锁住了, 广播的时候广播线程占据锁
+                        // 这里广播后会被锁着，直到发送广播线程解决，才开始下一轮的锁争夺战
+                        //     最后一个广播发送，由于只有当前一个pthread_cond_wait, 在广播的线程退出锁的时候，这里while循环结束，退出结束。同时广播线程可能还会继续做call_resume
                         pthread_cond_wait (&conf->cond, &conf->mutex);
         }
         pthread_mutex_unlock (&conf->mutex);
 }
 
+// notify只处理parent down
 int
 notify (xlator_t *this, int32_t event, void *data, ...)
 {
@@ -1082,6 +1136,7 @@ notify (xlator_t *this, int32_t event, void *data, ...)
         return 0;
 }
 
+// finit，结束初始化，退出线程并销毁conf->cond conf->mutex, 回收conf内存
 void
 fini (xlator_t *this)
 {
@@ -1104,7 +1159,9 @@ fini (xlator_t *this)
 	this->private = NULL;
 	return;
 }
-
+// 客户端摧毁， emmm
+// client_destroy 回调函数
+// 
 int
 iot_client_destroy (xlator_t *this, client_t *client)
 {

@@ -28,6 +28,7 @@
 
 struct iot_conf;
 
+// 如果是用nsec， 虽然是long，在32位系统下，4个字节？ 最多21亿，可能会溢出变成负数
 #define MAX_IDLE_SKEW                   4       /* In secs */
 #define skew_sec_idle_time(sec)         ((sec) + (random () % MAX_IDLE_SKEW))
 #define IOT_DEFAULT_IDLE                120     /* In secs. */
@@ -43,8 +44,8 @@ struct iot_conf;
 typedef enum {
         IOT_PRI_HI = 0, /* low latency */
         IOT_PRI_NORMAL, /* normal */
-        IOT_PRI_LO,     /* bulk */
-        IOT_PRI_LEAST,  /* least */
+        IOT_PRI_LO,     /* bulk */      //显得大
+        IOT_PRI_LEAST,  /* least */     // 最小
         IOT_PRI_MAX,
 } iot_pri_t;
 
@@ -54,14 +55,14 @@ typedef struct {
 } iot_client_ctx_t;
 
 struct iot_conf {
-        pthread_mutex_t      mutex;
+        pthread_mutex_t      mutex;             // 修改conf变量的锁， ac_iot_limit
         pthread_cond_t       cond;
 
-        int32_t              max_count;   /* configured maximum */
-        int32_t              curr_count;  /* actual number of threads running */
+        int32_t              max_count;   /* configured maximum */                      // 最多的线程数，配置文件可以更改
+        int32_t              curr_count;  /* actual number of threads running */        // 当前运行的线程数，创建完线程返回0再++
         int32_t              sleep_count;
 
-        int32_t              idle_time;   /* in seconds */
+        int32_t              idle_time;   /* in seconds */      // 空闲时间，option取出
 
         struct list_head     clients[IOT_PRI_MAX];
         /*
@@ -70,20 +71,22 @@ struct iot_conf {
          * first one I hit).  Instead of trying to update all such callers,
          * we use this to queue them.
          */
+        // 事实证明，在没有关联客户端的情况下，框架可以通过多种方式到达我们这里（server_first_lookup 是我遇到的第一个）。
+        //  我们没有尝试更新所有此类调用者，而是使用它来将它们排入队列。
         iot_client_ctx_t     no_client[IOT_PRI_MAX];
 
-        int32_t              ac_iot_limit[IOT_PRI_MAX];
-        int32_t              ac_iot_count[IOT_PRI_MAX];
+        int32_t              ac_iot_limit[IOT_PRI_MAX];         // 线程数的限制，option里面取
+        int32_t              ac_iot_count[IOT_PRI_MAX];         // 当前线程数
         int                  queue_sizes[IOT_PRI_MAX];
         int                  queue_size;
         pthread_attr_t       w_attr;
-        gf_boolean_t         least_priority; /*Enable/Disable least-priority */
+        gf_boolean_t         least_priority; /*Enable/Disable least-priority */ // option取出
 
         xlator_t            *this;
-        size_t               stack_size;
-        gf_boolean_t         down; /*PARENT_DOWN event is notified*/
-        gf_boolean_t         mutex_inited;
-        gf_boolean_t         cond_inited;
+        size_t               stack_size;        // w_attr绑定 线程的栈大小
+        gf_boolean_t         down; /*PARENT_DOWN event is notified*/            // 配置文件中selinux在io-threads上一层
+        gf_boolean_t         mutex_inited;      // mutex是否初始化
+        gf_boolean_t         cond_inited;       // cond是否初始化
 };
 
 typedef struct iot_conf iot_conf_t;

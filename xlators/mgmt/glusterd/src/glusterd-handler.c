@@ -803,16 +803,16 @@ glusterd_op_txn_begin (rpcsvc_request_t *req, glusterd_op_t op, void *ctx,
 
 local_locking_done:
         /* If no volname is given as a part of the command, locks will
-         * not be held, hence sending stage event. */
+         * not be held, hence sending stage event. */   // 没有卷名就不上锁
         if (volname || (priv->op_version < GD_OP_VERSION_3_6_0))
-                event_type = GD_OP_EVENT_START_LOCK;
+                event_type = GD_OP_EVENT_START_LOCK;            // 开始上锁
         else {
                 txn_op_info.state.state = GD_OP_STATE_LOCK_SENT;
                 event_type = GD_OP_EVENT_ALL_ACC;
         }
 
         /* Save opinfo for this transaction with the transaction id */
-        glusterd_txn_opinfo_init (&txn_op_info, NULL, &op, ctx, req);
+        glusterd_txn_opinfo_init (&txn_op_info, NULL, &op, ctx, req);   // 此时THIS->ctx->generation是什么
 
         ret = glusterd_set_txn_opinfo (txn_id, &txn_op_info);
         if (ret) {
@@ -6437,7 +6437,8 @@ struct rpcsvc_program gd_svc_peer_prog = {
 };
 
 
-
+// rpc服务 actor表格， rpcsvc_actor_t， 函数都放在这里。根据不同的命令分类放置
+// WXB 1
 rpcsvc_actor_t gd_svc_cli_actors[GLUSTER_CLI_MAXVALUE] = {
         [GLUSTER_CLI_PROBE]              = { "CLI_PROBE",         GLUSTER_CLI_PROBE,            glusterd_handle_cli_probe,             NULL, 0, DRC_NA},
         [GLUSTER_CLI_CREATE_VOLUME]      = { "CLI_CREATE_VOLUME", GLUSTER_CLI_CREATE_VOLUME,    glusterd_handle_create_volume,         NULL, 0, DRC_NA},

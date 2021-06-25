@@ -20,22 +20,22 @@ typedef void (*gf_timer_cbk_t) (void *);
 
 struct _gf_timer {
         union {
-                struct list_head list;
+                struct list_head list;          // 链表头为gf_timer_registry_t::active
                 struct {
                         struct _gf_timer *next;
                         struct _gf_timer *prev;
                 };
         };
-        struct timespec   at;
-        gf_timer_cbk_t    callbk;
-        void             *data;
-        xlator_t         *xl;
-	gf_boolean_t      fired;
+        struct timespec   at;                   // time out时间点
+        gf_timer_cbk_t    callbk;               // 回调函数
+        void             *data;                 // 回调参数
+        xlator_t         *xl;                   // 回调xl
+	gf_boolean_t      fired;                // 当前时间抵达at， fired true，即将触发cbk函数
 };
 
 struct _gf_timer_registry {
-        pthread_t        th;
-        char             fin;
+        pthread_t        th;            // timer执行线程tid
+        char             fin;           // 线程结束标志，当fin不为空结束线程，并释放active链表指向的所有gf_timer_t资源
         struct list_head active;
         gf_lock_t        lock;
 };

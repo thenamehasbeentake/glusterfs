@@ -20,26 +20,26 @@
 
 
 struct _circular_buffer {
-        struct timeval tv;
+        struct timeval tv;              // add的时候时间
         void *data;
 };
 
 typedef struct _circular_buffer circular_buffer_t;
 
 struct _buffer {
-        unsigned int w_index;
-        size_t  size_buffer;
-        gf_boolean_t use_once;
+        unsigned int w_index;           // 下一次add指向的circular_buffer_t的index
+        size_t  size_buffer;            // circular_buffer_t **cb指针数组的size
+        gf_boolean_t use_once;          // 是否只用一次，true就是只用一次，不能循环写
         /* This variable is assigned the proper value at the time of initing */
         /* the buffer. It indicates, whether the buffer should be used once */
         /*  it becomes full. */
 
-        int  used_len;
+        int  used_len;          // 已经使用的长度
         /* indicates the amount of circular buffer used. */
 
-        circular_buffer_t **cb;
-        void (*destroy_buffer_data) (void *data);
-        pthread_mutex_t   lock;
+        circular_buffer_t **cb;         // 指针数组， 每个指针指向_circular_buffer,data由外部传入，本身由接口申请释放
+        void (*destroy_buffer_data) (void *data);       // circular_buffer_t释放之前调用函数，对data进行释放
+        pthread_mutex_t   lock;         // __cb_add_entry_buffer，cb_buffer_show， cb_buffer_dump需要加锁
 };
 
 typedef struct _buffer buffer_t;

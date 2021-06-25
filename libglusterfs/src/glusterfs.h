@@ -480,7 +480,7 @@ struct _glusterfs_ctx {
         char              *process_uuid;
         FILE              *pidfp;
         char               fin;
-        void              *timer;
+        void              *timer;               // gf_timer_registery_t类型，gf_timer_registry_init初始化
         void              *ib;
         struct call_pool  *pool;
         void              *event_pool;

@@ -29,7 +29,7 @@
  * To add newer entities to be locked, we can just add more    *
  * entries to this table along with the type and default value */
 glusterd_valid_entities   valid_types[] = {
-        { "vol",  _gf_true  },
+        { "vol",  _gf_true  },          // vol有效type
         { "snap", _gf_false },
         { "global", _gf_false},
         { NULL              },
@@ -158,12 +158,12 @@ glusterd_get_mgmt_v3_lock_owner (char *key, uuid_t *uuid)
                 ret = -1;
                 goto out;
         }
-
+        // glusterd priv的v3_lock中取出当前volname-vol的锁
         ret = dict_get_bin (priv->mgmt_v3_lock, key, (void **) &lock_obj);
         if (!ret)
                 gf_uuid_copy (*uuid, lock_obj->lock_owner);
         else
-                gf_uuid_copy (*uuid, no_owner);
+                gf_uuid_copy (*uuid, no_owner);         // 无主锁
 
         ret = 0;
 out:
@@ -583,7 +583,7 @@ glusterd_mgmt_v3_lock (const char *name, uuid_t uuid, uint32_t *op_errno,
                 ret = -1;
                 goto out;
         }
-
+        // op是否有效
         is_valid = glusterd_mgmt_v3_is_type_valid (type);
         if (is_valid != _gf_true) {
                 gf_msg_callingfn (this->name, GF_LOG_ERROR,
@@ -605,7 +605,7 @@ glusterd_mgmt_v3_lock (const char *name, uuid_t uuid, uint32_t *op_errno,
         gf_msg_debug (this->name, 0,
                 "Trying to acquire lock of %s %s for %s as %s",
                 type, name, uuid_utoa (uuid), key);
-
+        // 取锁，无锁就给一个无主锁(*owner = 0)
         ret = glusterd_get_mgmt_v3_lock_owner (key, &owner);
         if (ret) {
                 gf_msg_debug (this->name, 0,
@@ -614,7 +614,7 @@ glusterd_mgmt_v3_lock (const char *name, uuid_t uuid, uint32_t *op_errno,
         }
 
         /* If the lock has already been held for the given volume
-         * we fail */
+         * we fail */   // 有主之锁，返回失败
         if (!gf_uuid_is_null (owner)) {
                 gf_msg_callingfn (this->name, GF_LOG_WARNING,
                                   0, GD_MSG_LOCK_ALREADY_HELD,
@@ -631,7 +631,7 @@ glusterd_mgmt_v3_lock (const char *name, uuid_t uuid, uint32_t *op_errno,
                 ret = -1;
                 goto out;
         }
-
+        // uuid(glusterd的UUID)作为锁主
         gf_uuid_copy (lock_obj->lock_owner, uuid);
 
         ret = dict_set_bin (priv->mgmt_v3_lock, key, lock_obj,
@@ -663,12 +663,12 @@ glusterd_mgmt_v3_lock (const char *name, uuid_t uuid, uint32_t *op_errno,
 
         mgmt_lock_timer_ctx = mgmt_lock_timer_xl->ctx;
         GF_VALIDATE_OR_GOTO (this->name, mgmt_lock_timer_ctx, out);
-
+        // 设置锁超时回调函数
         mgmt_lock_timer->timer = gf_timer_call_after
                                      (mgmt_lock_timer_ctx, delay,
                                       gd_mgmt_v3_unlock_timer_cbk,
                                       key_dup);
-
+        // 字典中也设置以下vonname-vol,对于key为mgmt_lock_timer指针，其中包含当前glusterd xlator指针和超时timer
         ret = dict_set_bin (priv->mgmt_v3_lock_timer, key, mgmt_lock_timer,
                             sizeof (glusterd_mgmt_v3_lock_timer));
         if (ret) {
@@ -679,7 +679,7 @@ glusterd_mgmt_v3_lock (const char *name, uuid_t uuid, uint32_t *op_errno,
                 goto out;
         }
 
-
+        // backtrace存入预分配的ctx->btbuff中， 回来看
         /* Saving the backtrace into the pre-allocated buffer, ctx->btbuf*/
         if ((bt = gf_backtrace_save (NULL))) {
                 snprintf (key, sizeof (key), "debug.last-success-bt-%s-%s",

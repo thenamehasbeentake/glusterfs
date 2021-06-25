@@ -13,7 +13,7 @@
 #define __IOT_MEM_TYPES_H__
 
 #include "mem-types.h"
-
+// glusterfs io-threads memorytypes
 enum gf_iot_mem_types_ {
         gf_iot_mt_iot_conf_t  = gf_common_mt_end + 1,
         gf_iot_mt_client_ctx_t,

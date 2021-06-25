@@ -4793,8 +4793,8 @@ glusterd_store_save_quota_version_and_cksum (glusterd_volinfo_t *volinfo)
                 goto out;
         }
 
-        snprintf (buf, sizeof (buf)-1, "%u", volinfo->quota_conf_cksum);
-        ret = gf_store_save_value (fd, "cksum", buf);
+        snprintf (buf, sizeof (buf)-1, "%u", volinfo->quota_conf_cksum); // quota.cksum.tmp文件中
+        ret = gf_store_save_value (fd, "cksum", buf);   //写入 cksum=volinfo->quota_conf_cksum
         if (ret) {
                 gf_msg (this->name, GF_LOG_ERROR, 0,
                         GD_MSG_CKSUM_STORE_FAIL, "Failed to store cksum");
@@ -4803,14 +4803,14 @@ glusterd_store_save_quota_version_and_cksum (glusterd_volinfo_t *volinfo)
 
         memset (buf, 0, sizeof (buf));
         snprintf (buf, sizeof (buf)-1, "%u", volinfo->quota_conf_version);
-        ret = gf_store_save_value (fd, "version", buf);
+        ret = gf_store_save_value (fd, "version", buf); // version=volinfo->quota_conf_version
         if (ret) {
                 gf_msg (this->name, GF_LOG_ERROR, 0,
                         GD_MSG_VERS_STORE_FAIL, "Failed to store version");
                 goto out;
         }
 
-        ret = gf_store_rename_tmppath (shandle);
+        ret = gf_store_rename_tmppath (shandle);        // tmp替换原文件
         if (ret)
                 goto out;
 
@@ -4820,7 +4820,7 @@ out:
         gf_store_handle_destroy (shandle);
         return ret;
 }
-
+// 在打开的/var/lib/glusterd/vols/volname/quota.conf中写入版本头QUOTA_CONF_HEADER
 int32_t
 glusterd_quota_conf_write_header (int fd)
 {

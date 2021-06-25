@@ -22,27 +22,27 @@ glusterfs_ctx_new ()
 
 	/* no GF_CALLOC here, gf_acct_mem_set_enable is not
 	   yet decided at this point */
-        ctx = calloc (1, sizeof (*ctx));
+        ctx = calloc (1, sizeof (*ctx));        // 内存记录设置在这里还没确定下来//其实变量已经可以确定了
         if (!ctx) {
                 ret = -1;
                 goto out;
         }
-
+        // 获取上述还没确定该内存记录有关的参数值
         ctx->mem_acct_enable = gf_global_mem_acct_enable_get();
-
+        // 配置图链表初始化
         INIT_LIST_HEAD (&ctx->graphs);
 #if defined(OLD_MEM_POOLS)
-        INIT_LIST_HEAD (&ctx->mempool_list);
+        INIT_LIST_HEAD (&ctx->mempool_list);    // 旧的内存池
 #endif
-        INIT_LIST_HEAD (&ctx->volfile_list);
-
+        INIT_LIST_HEAD (&ctx->volfile_list);    // 卷配置文件链表初始化
+        // 守护进程管道初始化为-1
 	ctx->daemon_pipe[0] = -1;
 	ctx->daemon_pipe[1] = -1;
-
+        // log等级初始化为默认(INFO)
         ctx->log.loglevel = DEFAULT_LOG_LEVEL;
 
 #ifdef RUN_WITH_VALGRIND
-        ctx->cmd_args.valgrind = _gf_true;
+        ctx->cmd_args.valgrind = _gf_true;      // 启动valgrind
 #endif
 
         /* lock is never destroyed! */
@@ -51,7 +51,7 @@ glusterfs_ctx_new ()
 		free (ctx);
 		ctx = NULL;
 	}
-
+        // 初始化字典计数，最大字典对，总使用的字典对，总是用的字典
         GF_ATOMIC_INIT (ctx->stats.max_dict_pairs, 0);
         GF_ATOMIC_INIT (ctx->stats.total_pairs_used, 0);
         GF_ATOMIC_INIT (ctx->stats.total_dicts_used, 0);
