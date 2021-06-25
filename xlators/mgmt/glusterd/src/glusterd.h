@@ -428,7 +428,7 @@ struct glusterd_volinfo_ {
         int                       port;
         gf_store_handle_t        *shandle;
         gf_store_handle_t        *node_state_shandle;
-        gf_store_handle_t        *quota_conf_shandle;
+        gf_store_handle_t        *quota_conf_shandle;           // 配额配置文件的handle， /var/lib/glusterd/vols/volname/quota.conf.tmp
 
         /* Defrag/rebalance related */
         glusterd_rebalance_t      rebal;
@@ -444,7 +444,7 @@ struct glusterd_volinfo_ {
         int                       version;
         uint32_t                  quota_conf_version;
         uint32_t                  cksum;
-        uint32_t                  quota_conf_cksum;
+        uint32_t                  quota_conf_cksum;     // quota.conf配置文件内容计算checksum之后的值
         gf_transport_type         transport_type;
 
         dict_t                   *dict;

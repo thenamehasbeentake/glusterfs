@@ -978,7 +978,7 @@ out:
 
         return ret;
 }
-
+// update quota size , trusted.glusterfs.quota.size.1=0x usage_size(byte) usage_object usage_dir
 int32_t
 mq_update_size (xlator_t *this, loc_t *loc, quota_meta_t *delta)
 {

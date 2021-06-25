@@ -721,7 +721,7 @@ out:
                              "unsuccessful", volinfo->volname);
         return ret;
 }
-// 具体设置quota limit的函数
+// 具体设置quota limit
 static int
 glusterd_set_quota_limit (char *volname, char *path, char *hard_limit,
                           char *soft_limit, char *key, char **op_errstr)
@@ -1253,7 +1253,7 @@ glusterd_store_quota_config (glusterd_volinfo_t *volinfo, char *path,
                 ret = 0;
                 break;
         }
-
+        // 有修改 quota_conf_version+1
         if (modified)
                 glusterd_update_quota_conf_version (volinfo);
 
@@ -1269,16 +1269,16 @@ out:
         if (ret && (fd > 0)) {
                 gf_store_unlink_tmppath (volinfo->quota_conf_shandle);
         } else if (!ret && GF_QUOTA_OPTION_TYPE_UPGRADE != opcode) {
-                ret = gf_store_rename_tmppath (volinfo->quota_conf_shandle);
+                ret = gf_store_rename_tmppath (volinfo->quota_conf_shandle);    //刷盘文件 重命名 再刷目录
                 if (modified) {
-                        ret = glusterd_compute_cksum (volinfo, _gf_true);
+                        ret = glusterd_compute_cksum (volinfo, _gf_true);       // 更新volinfo->quota_conf_cksum
                         if (ret) {
                                 gf_msg (this->name, GF_LOG_ERROR, 0,
                                         GD_MSG_CKSUM_COMPUTE_FAIL, "Failed to "
                                         "compute cksum for quota conf file");
                                 return ret;
                         }
-
+                        // 修改quota.cksum
                         ret = glusterd_store_save_quota_version_and_cksum
                                                                       (volinfo);
                         if (ret)
@@ -1366,7 +1366,7 @@ glusterd_quota_limit_usage (glusterd_volinfo_t *volinfo, dict_t *dict,
                         "%s", path);
                 goto out;
         }
-        // glusterd 存储 quota 配置
+        // quota.conf和quota.cksum文件更新
         ret = glusterd_store_quota_config (volinfo, path, gfid_str, opcode,
                                            op_errstr);
         if (ret)
@@ -1943,7 +1943,7 @@ glusterd_create_quota_auxiliary_mount (xlator_t *this, char *volname, int type)
         if (dict_get_str (this->options, "transport.socket.bind-address",
                           &volfileserver) != 0)
                 volfileserver = "localhost";
-
+// WXB quota进程的启动
         synclock_unlock (&priv->big_lock);
         ret = runcmd (SBIN_DIR"/glusterfs",
                       "--volfile-server", volfileserver,

@@ -16,7 +16,7 @@
 struct gf_store_handle_ {
         char    *path;
         int     fd;
-        int     tmp_fd;
+        int     tmp_fd;         // posix接口打开临时文件的描述符
         FILE    *read;
         int     locked;   /* state of lockf() */
 };

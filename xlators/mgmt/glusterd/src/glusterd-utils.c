@@ -2691,7 +2691,7 @@ glusterd_volume_compute_cksum (glusterd_volinfo_t  *volinfo, char *cksum_path,
                         goto out;
                 }
         }
-
+        // 读出新建文件的checksum，与上一步的cksum结合
         ret = get_checksum_for_file (fd, &cksum);
         if (ret)
                 goto out;
@@ -2707,7 +2707,7 @@ out:
 
         return ret;
 }
-
+// 更新quota.conf中内容的checksum值到volinfo->quota_conf_cksum
 int glusterd_compute_cksum (glusterd_volinfo_t *volinfo,
                             gf_boolean_t is_quota_conf)
 {
@@ -2723,7 +2723,7 @@ int glusterd_compute_cksum (glusterd_volinfo_t *volinfo,
         GF_ASSERT (this);
         conf = this->private;
         GF_ASSERT (conf);
-
+        // path = /var/lib/glusterd/vols/volname
         GLUSTERD_GET_VOLUME_DIR (path, volinfo, conf);
 
         if (is_quota_conf) {
@@ -2737,7 +2737,7 @@ int glusterd_compute_cksum (glusterd_volinfo_t *volinfo,
                 snprintf (filepath, sizeof (filepath), "%s/%s", path,
                           GLUSTERD_VOLUME_INFO_FILE);
         }
-
+        // 计算cksum_path中的checksum值，存入cs中
         ret = glusterd_volume_compute_cksum (volinfo, cksum_path, filepath,
                                              is_quota_conf, &cs);
         if (ret) {

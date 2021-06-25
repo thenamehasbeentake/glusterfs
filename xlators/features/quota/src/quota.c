@@ -402,7 +402,7 @@ check_ancestory_continue (struct list_head *parents, inode_t *inode,
         if (link_count == 0)
                 local->fop_continue_cbk (frame);
 }
-
+// ancestory 祖先
 void
 check_ancestory (call_frame_t *frame, inode_t *inode)
 {
@@ -1183,7 +1183,7 @@ quota_check_size_limit (call_frame_t *frame, quota_inode_ctx_t *ctx,
         GF_ASSERT (local);
 
         if (ctx != NULL && (ctx->hard_lim > 0 || ctx->soft_lim > 0)) {
-                wouldbe_size = ctx->size + delta;
+                wouldbe_size = ctx->size + delta;       // 这里的ctx->size异常
 
                 LOCK (&ctx->lock);
                 {
