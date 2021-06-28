@@ -435,6 +435,7 @@ main (int argc, char **argv)
         char *wdbuf;;
         int ret;
         int fd;
+        // 相对路径名的最大字节数，包括终止null字节
         long pathmax = pathconf ("/", _PC_PATH_MAX);
         struct timeval tv = {0,};
         struct timeval *tvp = NULL;

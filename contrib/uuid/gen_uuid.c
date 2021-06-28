@@ -463,6 +463,7 @@ static void close_all_fds(void)
 	int i, max;
 
 #if defined(HAVE_SYSCONF) && defined(_SC_OPEN_MAX)
+// 每个进程最大打开文件个数
 	max = sysconf(_SC_OPEN_MAX);
 #elif defined(HAVE_GETDTABLESIZE)
 	max = getdtablesize();

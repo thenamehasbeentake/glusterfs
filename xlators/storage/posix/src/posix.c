@@ -7575,6 +7575,7 @@ init (xlator_t *this)
          * use relative paths when they are too long. See also
          * MAKE_REAL_PATH in posix-handle.h
           */
+        // 相对路径名的最大字节数，包括终止null字节
         _private->path_max = pathconf(_private->base_path, _PC_PATH_MAX);
         if (_private->path_max != -1 &&
             _XOPEN_PATH_MAX + _private->base_path_length > _private->path_max) {

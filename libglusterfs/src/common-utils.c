@@ -2968,8 +2968,9 @@ get_mem_size ()
 
 	uint64_t page_size = 0;
 	uint64_t num_pages = 0;
-
+        // 系统存储页长度(字节数) posix.1
 	page_size = sysconf (_SC_PAGESIZE);
+        // 此宏查看内存的总页数.. 似乎不在.1里面
 	num_pages = sysconf (_SC_PHYS_PAGES);
 
 	memsize = page_size * num_pages;
