@@ -153,7 +153,7 @@
 
 struct quota_dentry {
         char            *name;
-        uuid_t           par;
+        uuid_t           par;   // parent
         struct list_head next;
 };
 typedef struct quota_dentry quota_dentry_t;
