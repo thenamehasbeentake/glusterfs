@@ -1345,6 +1345,7 @@ glusterd_quota_limit_usage (glusterd_volinfo_t *volinfo, dict_t *dict,
 
         if (is_origin_glusterd (dict)) {
                 if (opcode == GF_QUOTA_OPTION_TYPE_LIMIT_USAGE) {
+                        // path目录设置QUOTA_LIMIT_KEY，hlsl一对拓展元数据
                         ret = glusterd_set_quota_limit (volinfo->volname, path,
                                                         hard_limit, soft_limit,
                                                         QUOTA_LIMIT_KEY,
