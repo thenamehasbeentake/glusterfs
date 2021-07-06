@@ -41,7 +41,8 @@ enum argp_option_keys {
 
 int cli_default_conn_timeout;
 int cli_ten_minutes_timeout;
-
+// 头文件里面什么全局变量会发生什么
+// https://www.cnblogs.com/Sorean/p/4709039.html
 typedef enum {
         COLD_BRICK_COUNT,
         COLD_TYPE,

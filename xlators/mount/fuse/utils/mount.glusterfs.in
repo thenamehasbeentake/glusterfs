@@ -357,6 +357,7 @@ check_recursive_mount ()
 
     # GFID check first
     # remove trailing / from mount point
+    # if $1 = ****/, ${1%/}xxx = ****xxx
     mnt_dir=${1%/};
 
     if [ -n "${getfattr}" ]; then
@@ -382,7 +383,7 @@ check_recursive_mount ()
     mnt_dev=`${lgetdev} $mnt_dir`;
     for brick in "$brick_path"; do
         # evaluate brick path to see if this is local, if non-local, skip iteration
-        ls $brick > /dev/null 2>&1;
+        ls $brick > /dev/null 2>&1;     #这里的ls是来判断目录的软链接吗？
         if [ $? -ne 0 ]; then
             continue;
         fi
@@ -393,7 +394,7 @@ check_recursive_mount ()
                 # brick is local
                 while [ 1 ]; do
                     tmp_brick="$brick";
-                    brick="$brick"/..;
+                    brick="$brick"/..;      # 这个是避免挂载点是brick祖先目录...
                     brick_dev=`${lgetdev} $brick`;
                     brick_inode=`${lgetinode} $brick`;
                     if [ "$mnt_inode" -eq "$brick_inode" \
@@ -402,7 +403,7 @@ check_recursive_mount ()
                         exit 2;
                     fi
                     [ "$root_inode" -ne "$brick_inode" \
-                        -o "$root_dev" -ne "$brick_dev" ] || break;
+                        -o "$root_dev" -ne "$brick_dev" ] || break; # || 前面条件为true，不会执行 break;否则break
                 done;
             else
                 continue;
@@ -663,11 +664,13 @@ main ()
         volfile_loc=$1
         mount_point=$2
     fi
-
+    # -r 文件可读
+    # https://blog.csdn.net/u013220323/article/details/81114801
     [ -r "$volfile_loc" ] || {
         # '%' included to support ipv6 link local addresses
         server_ip=$(echo "$volfile_loc" | sed -n 's/\([a-zA-Z0-9:%.\-]*\):.*/\1/p');
         volume_str=$(echo "$volfile_loc" | sed -n 's/.*:\([^ ]*\).*/\1/p');
+        #  -n 判断变量的值，是否为空 name = 名字
         [ -n "$volume_str" ] && {
             volume_id=$volume_str
             volume_str_temp=$volume_str
@@ -683,6 +686,7 @@ main ()
             }
         }
         volfile_loc="";
+        # -z 判断 变量的值，是否为空； zero = 0
         [ -z "$volume_id" -o -z "$server_ip" ] && {
             cat <<EOF >&2
 ERROR: Server name/volume name unspecified cannot proceed further..
@@ -729,9 +733,9 @@ EOF
         /snaps/* ) read_only=1
     esac
 
-    check_recursive_mount "$mount_point";
+    check_recursive_mount "$mount_point";       # 当前设备，可能同时是服务端，且挂载目录为卷配置文件中的brick目录的“祖先”目录，check这种情况
 
-    update_updatedb;
+    update_updatedb;    # 更新/etc/updatedb.conf文件，确保PRUNEFS中有fuse.glusterfs
 
     start_glusterfs;
 }
