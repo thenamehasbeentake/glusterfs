@@ -383,7 +383,7 @@ check_recursive_mount ()
     mnt_dev=`${lgetdev} $mnt_dir`;
     for brick in "$brick_path"; do
         # evaluate brick path to see if this is local, if non-local, skip iteration
-        ls $brick > /dev/null 2>&1;     #这里的ls是来判断目录的软链接吗？
+        ls $brick > /dev/null 2>&1;     #这里的ls是来判断目录的软链接吗？  看存储的brick目录是否存在
         if [ $? -ne 0 ]; then
             continue;
         fi
