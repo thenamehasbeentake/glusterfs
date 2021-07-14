@@ -51,7 +51,7 @@ glusterfs_ctx_new ()
 		free (ctx);
 		ctx = NULL;
 	}
-        // 初始化字典计数，最大字典对，总使用的字典对，总是用的字典
+        // 初始化字典计数，最大字典对，总使用的字典对，总使用的字典
         GF_ATOMIC_INIT (ctx->stats.max_dict_pairs, 0);
         GF_ATOMIC_INIT (ctx->stats.total_pairs_used, 0);
         GF_ATOMIC_INIT (ctx->stats.total_dicts_used, 0);
