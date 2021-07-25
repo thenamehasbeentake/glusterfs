@@ -274,6 +274,7 @@ set_fuse_mount_options (glusterfs_ctx_t *ctx, dict_t *options)
         /* Check if mount-point is absolute path,
          * if not convert to absolute path by concating with CWD
          */
+        // 以相对目录挂载
         if (cmd_args->mount_point[0] != '/') {
                 if (getcwd (cwd, PATH_MAX) != NULL) {
                         ret = gf_asprintf (&mount_point, "%s/%s", cwd,
@@ -589,7 +590,7 @@ create_fuse_mount (glusterfs_ctx_t *ctx)
                 gf_msg ("glusterfsd", GF_LOG_ERROR, 0, glusterfsd_msg_7);
                 return -1;
         }
-
+        // 最顶层的fuse xlator，直接在代码中构建而不是通过配置文件
         master = GF_CALLOC (1, sizeof (*master),
                             gfd_mt_xlator_t);
         if (!master)
@@ -613,7 +614,8 @@ create_fuse_mount (glusterfs_ctx_t *ctx)
         ret = set_fuse_mount_options (ctx, master->options);
         if (ret)
                 goto err;
-
+        // 没看懂，没找到。可能是mount.glusterfs -o选项的东西。
+        // gdb调试不带-o 选项的挂载是此处为0x00
         if (cmd_args->fuse_mountopts) {
                 ret = dict_set_static_ptr (master->options, ZR_FUSE_MOUNTOPTS,
                                            cmd_args->fuse_mountopts);
@@ -1737,6 +1739,7 @@ print_exports_file (const char *exports_file)
         /* XLATORDIR passed through a -D flag to GCC */
         ret = gf_asprintf (&libpathfull, "%s/%s/server.so", XLATORDIR,
                            "nfs");
+        // /usr/local/lib/glusterfs/3.12.15/xlator/protocol/server.so
         if (ret < 0) {
                 gf_log ("glusterfs", GF_LOG_CRITICAL, "asprintf () failed.");
                 ret = -1;
@@ -2036,7 +2039,7 @@ glusterfs_pidfile_setup (glusterfs_ctx_t *ctx)
 
         if (!cmd_args->pid_file)
                 return 0;
-
+        // a+, 文件尾打开，读写
         pidfp = fopen (cmd_args->pid_file, "a+");
         if (!pidfp) {
                 gf_msg ("glusterfsd", GF_LOG_ERROR, errno, glusterfsd_msg_17,
@@ -2076,7 +2079,7 @@ glusterfs_pidfile_cleanup (glusterfs_ctx_t *ctx)
 
         return 0;
 }
-
+// 尝试锁住pid文件，并截断该文件，在其中写入当前进程pid
 int
 glusterfs_pidfile_update (glusterfs_ctx_t *ctx)
 {
@@ -2089,28 +2092,28 @@ glusterfs_pidfile_update (glusterfs_ctx_t *ctx)
         pidfp = ctx->pidfp;
         if (!pidfp)
                 return 0;
-
+        // F_TLOCK try lock尝试锁
         ret = lockf (fileno (pidfp), F_TLOCK, 0);
         if (ret) {
                 gf_msg ("glusterfsd", GF_LOG_ERROR, errno, glusterfsd_msg_18,
                         cmd_args->pid_file);
                 return ret;
         }
-
+        // FILE专门换为fd， 截断到0
         ret = sys_ftruncate (fileno (pidfp), 0);
         if (ret) {
                 gf_msg ("glusterfsd", GF_LOG_ERROR, errno, glusterfsd_msg_20,
                         cmd_args->pid_file);
                 return ret;
         }
-
+        // 写当当前进程id
         ret = fprintf (pidfp, "%d\n", getpid ());
         if (ret <= 0) {
                 gf_msg ("glusterfsd", GF_LOG_ERROR, errno, glusterfsd_msg_21,
                         cmd_args->pid_file);
                 return ret;
         }
-
+        // 刷缓存到内核
         ret = fflush (pidfp);
         if (ret) {
                 gf_msg ("glusterfsd", GF_LOG_ERROR, errno, glusterfsd_msg_21,
@@ -2271,7 +2274,7 @@ daemonize (glusterfs_ctx_t *ctx)
                 /* parent */
                 /* close write */
                 sys_close (ctx->daemon_pipe[1]);
-
+                // in fuse xlator init func init ctx->mnt_pid
                 if (ctx->mnt_pid > 0) {
                         ret = waitpid (ctx->mnt_pid, &cstatus, 0);
                         if (!(ret == ctx->mnt_pid)) {
@@ -2295,9 +2298,9 @@ postfork:
         ret = glusterfs_pidfile_update (ctx);
         if (ret)
                 goto out;
-
+        // 取消原来的日志定时器，并重新设置
         ret = gf_log_inject_timer_event (ctx);
-
+        // 信号处理设置
         glusterfs_signals_setup (ctx);
 out:
         return ret;
@@ -2358,7 +2361,7 @@ glusterfs_process_volfp (glusterfs_ctx_t *ctx, FILE *fp)
                 gf_msg ("", GF_LOG_ERROR, 0, glusterfsd_msg_26);
                 goto out;
         }
-
+        // fuse层不应该在配置文件中出现
         for (trav = graph->first; trav; trav = trav->next) {
                 if (strcmp (trav->type, "mount/fuse") == 0) {
                         gf_msg ("glusterfsd", GF_LOG_ERROR, 0,
@@ -2366,7 +2369,8 @@ glusterfs_process_volfp (glusterfs_ctx_t *ctx, FILE *fp)
                         goto out;
                 }
         }
-
+        // 这里是glusterfsd配置文件的处理
+        //server是最上面的(glusterfsd), 把字典中*auth*复制给他的子xlator？？？ 需要debug一下
         xlator_t *xl = graph->first;
         if (strcmp (xl->type, "protocol/server") == 0) {
                 (void) copy_opts_to_child (xl, FIRST_CHILD (xl), "*auth*");
@@ -2479,7 +2483,7 @@ main (int argc, char *argv[])
                 /* If this option is set we want to print & verify the file,
                  * set the return value (exit code in this case) and exit.
                  */
-                ret =  print_netgroups_file (cmd->print_netgroups);
+                ret =  print_netgroups_file (cmd->print_netgroups);  // nfs/server.so加载
                 goto out;
         }
 
@@ -2488,7 +2492,7 @@ main (int argc, char *argv[])
                  * set the return value (exit code in this case)
                  * and exit.
                  */
-                ret = print_exports_file (cmd->print_exports);
+                ret = print_exports_file (cmd->print_exports);  // nfs/server.so加载
                 goto out;
         }
 
@@ -2507,6 +2511,14 @@ main (int argc, char *argv[])
                         strncat (cmdlinestr, argv[i],
                                  (sizeof (cmdlinestr) - 1));
                 }
+                // 打印进程启动第一条log，如：
+                /*
+                        [2021-07-12 07:16:28.528846] I [MSGID: 100030] 
+                        [glusterfsd.c:2511:main] 0-/usr/local/sbin/glusterfs: 
+                        Started running /usr/local/sbin/glusterfs version 3.12.15 
+                        (args: /usr/local/sbin/glusterfs --volfile-server=192.168.1.105
+                         --volfile-id=vol /mnt/vol)
+                */
                 gf_msg (argv[0], GF_LOG_INFO, 0, glusterfsd_msg_30,
                         argv[0], PACKAGE_VERSION, cmdlinestr);
 
@@ -2518,7 +2530,7 @@ main (int argc, char *argv[])
         ret = create_fuse_mount (ctx);
         if (ret)
                 goto out;
-
+        // 产生子进程，父进程_exit
         ret = daemonize (ctx);
         if (ret)
                 goto out;

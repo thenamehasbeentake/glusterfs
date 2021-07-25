@@ -455,7 +455,7 @@ glusterfs_graph_parent_up (glusterfs_graph_t *graph)
         return ret;
 }
 
-
+// 针对mount的时候一些选项，额外插入一下xlator
 int
 glusterfs_graph_prepare (glusterfs_graph_t *graph, glusterfs_ctx_t *ctx,
                          char *volume_name)

@@ -1826,7 +1826,7 @@ __gf_log_inject_timer_event (glusterfs_ctx_t *ctx)
 out:
         return ret;
 }
-
+// 取消原来的日志计时器并重新设置
 int
 gf_log_inject_timer_event (glusterfs_ctx_t *ctx)
 {

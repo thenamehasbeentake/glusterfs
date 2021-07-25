@@ -40,7 +40,7 @@ xlator_init_unlock (void)
         (void) pthread_mutex_unlock (&xlator_init_mutex);
 }
 
-
+// xlaotr的fop及其他选项  函数为空时设置为默认的
 static void
 fill_defaults (xlator_t *xl)
 {
@@ -184,7 +184,7 @@ xlator_volopt_dynload (char *xlator_type, void **dl_handle,
 
 }
 
-
+// xlator加载动态库，根据type的名字加载如/usr/local/lib/glusterfs/3.12.15/xlator/`xl->type`.so
 int
 xlator_dynload (xlator_t *xl)
 {
@@ -299,7 +299,7 @@ out:
         return ret;
 }
 
-
+// 根据type的名字加载xlaotr.so动态库，初始化其中的一些函数
 int
 xlator_set_type (xlator_t *xl, const char *type)
 {
@@ -464,7 +464,7 @@ __xlator_init(xlator_t *xl)
 {
         xlator_t *old_THIS = NULL;
         int       ret = 0;
-
+        // init的时候全局的xlator赋值为当前的xlator，这是为什么呢？
         old_THIS = THIS;
         THIS = xl;
 

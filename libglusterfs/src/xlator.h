@@ -924,7 +924,7 @@ struct _xlator {
         struct xlator_fops    *fops;
         struct xlator_cbks    *cbks;
         struct xlator_dumpops *dumpops;
-        struct list_head       volume_options;  /* list of volume_option_t */
+        struct list_head       volume_options;  /* list of volume_option_t */  // 这个list的tail指向volume_opt_list_t结构体的list，见xlator_dynload
 
         void              (*fini) (xlator_t *this);
         int32_t           (*init) (xlator_t *this);

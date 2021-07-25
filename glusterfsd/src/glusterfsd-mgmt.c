@@ -2375,7 +2375,7 @@ glusterfs_rpcsvc_notify (rpcsvc_t *rpc, void *xl, rpcsvc_event_t event,
 out:
         return 0;
 }
-
+// glusterfsd监听，glusterfs进程初始化
 int
 glusterfs_listener_init (glusterfs_ctx_t *ctx)
 {
