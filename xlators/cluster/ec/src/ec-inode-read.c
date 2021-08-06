@@ -1779,7 +1779,7 @@ void ec_wind_stat(ec_t * ec, ec_fop_data_t * fop, int32_t idx)
                       ec->xl_list[idx], ec->xl_list[idx]->fops->stat,
                       &fop->loc[0], fop->xdata);
 }
-
+// fop  stat的handle
 int32_t ec_manager_stat(ec_fop_data_t * fop, int32_t state)
 {
     ec_cbk_data_t * cbk;
@@ -1788,8 +1788,10 @@ int32_t ec_manager_stat(ec_fop_data_t * fop, int32_t state)
     {
         case EC_STATE_INIT:
         case EC_STATE_LOCK:
-            if (fop->fd == NULL) {
-                ec_lock_prepare_inode(fop, &fop->loc[0], EC_QUERY_INFO);
+            if (fop->fd == NULL) {  // 应该是为空的
+                // flag = EC_QUERY_INFO(4), 
+                // 根据loc->inode的ctx判断是否需要新建一个锁，更新新建锁的loc信息，对rename操作做特殊处理(lockcout > 0， 且ctx中的lock与fop中的lock一样)
+                ec_lock_prepare_inode(fop, &fop->loc[0], EC_QUERY_INFO);    // wind下来的loc， loc在此处不为空， loc->inode如果为空则直接return
             } else {
                 ec_lock_prepare_fd(fop, fop->fd, EC_QUERY_INFO);
             }
@@ -1888,12 +1890,12 @@ int32_t ec_manager_stat(ec_fop_data_t * fop, int32_t state)
             return EC_STATE_END;
     }
 }
-
+// fop stat
 void ec_stat(call_frame_t * frame, xlator_t * this, uintptr_t target,
              int32_t minimum, fop_stat_cbk_t func, void * data, loc_t * loc,
              dict_t * xdata)
 {
-    ec_cbk_t callback = { .stat = func };
+    ec_cbk_t callback = { .stat = func };   // fop的回调
     ec_fop_data_t * fop = NULL;
     int32_t error = ENOMEM;
 
@@ -1909,7 +1911,7 @@ void ec_stat(call_frame_t * frame, xlator_t * this, uintptr_t target,
     if (fop == NULL) {
         goto out;
     }
-
+    // wind下来的loc不应该为空，且loc->inode也不应该为空
     if (loc != NULL) {
         if (loc_copy(&fop->loc[0], loc) != 0) {
             gf_msg (this->name, GF_LOG_ERROR, ENOMEM,

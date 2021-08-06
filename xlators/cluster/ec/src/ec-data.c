@@ -108,6 +108,9 @@ void ec_cbk_data_destroy(ec_cbk_data_t * cbk)
  * heal to complete as healing big file/directory could take a while. Which
  * will lead to hang on the mount.
  */
+/*
+PARENT_DOWN 只有在发生拓扑结构变化时，这些 fops 完成后才会通知孩子。 我们不希望拓扑结构变化等待修复完成，因为修复大文件/目录可能需要一段时间。 这将导致mount的客户端挂住。 
+*/
 static gf_boolean_t
 ec_needs_graceful_completion (ec_fop_data_t *fop)
 {
@@ -122,7 +125,7 @@ ec_fop_data_t * ec_fop_data_allocate(call_frame_t * frame, xlator_t * this,
                                      ec_wind_f wind, ec_handler_f handler,
                                      ec_cbk_t cbks, void * data)
 {
-    ec_fop_data_t * fop, * parent;
+    ec_fop_data_t * fop, * parent;          // 可能出现一个fop中执行了另一个fop的现象
     ec_t * ec = this->private;
 
     fop = mem_get0(ec->fop_pool);
@@ -156,11 +159,11 @@ ec_fop_data_t * ec_fop_data_allocate(call_frame_t * frame, xlator_t * this,
      */
     if (frame != NULL)
     {
-        fop->frame = copy_frame(frame);
+        fop->frame = copy_frame(frame);     // 从父frame中拷贝一个自己的frame，继承其中一些如uid之类的信息
     }
     else
     {
-        fop->frame = create_frame(this, this->ctx->pool);
+        fop->frame = create_frame(this, this->ctx->pool);   // 新建一个自己的frame
     }
     if (fop->frame == NULL)
     {
@@ -172,39 +175,40 @@ ec_fop_data_t * ec_fop_data_allocate(call_frame_t * frame, xlator_t * this,
 
         return NULL;
     }
-    fop->id = id;
+    fop->id = id;               // GF_FOP_XXX
     fop->refs = 1;
 
-    fop->flags = flags;
+    fop->flags = flags;         // 锁类型
     fop->minimum = minimum;
     fop->mask = target;
 
-    fop->wind = wind;
-    fop->handler = handler;
-    fop->cbks = cbks;
-    fop->data = data;
+    fop->wind = wind;           // wind函数
+    fop->handler = handler;     // 管理状态的处理函数
+    fop->cbks = cbks;           // fop的回调函数
+    fop->data = data;           // 回来看，随便看一些fop，wind下来的参数都为NULL
 
-    fop->uid = fop->frame->root->uid;
+    fop->uid = fop->frame->root->uid;   // 继承root frame的uid和gid
     fop->gid = fop->frame->root->gid;
 
     LOCK_INIT(&fop->lock);
 
-    fop->frame->local = fop;
+    fop->frame->local = fop;            // local frame等于自己
 
-    if (frame != NULL)
+    if (frame != NULL)                  // 有上一个fop调用的fop
     {
-        parent = frame->local;
+        parent = frame->local;          // parent为上一个fop
         if (parent != NULL)
         {
-            ec_sleep(parent);
+            ec_sleep(parent);           // 父fop sleep， ref++和jobs++
         }
 
         fop->parent = parent;
     }
-
-    if (ec_needs_graceful_completion (fop)) {
+// 把修复的fop放入pending队列，避免因graph拓扑结构变化导致客户端来的fop卡住，
+// 这个graph拓扑结构变化->PARENT_DOWN-> fop等待的过程 回来看
+    if (ec_needs_graceful_completion (fop)) {   
             LOCK(&ec->lock);
-
+            // 将fop->pending_list(new)插入 ec->pending_fops(head)链表的尾部
             list_add_tail(&fop->pending_list, &ec->pending_fops);
 
             UNLOCK(&ec->lock);

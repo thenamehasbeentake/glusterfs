@@ -379,8 +379,8 @@ void ec_sleep(ec_fop_data_t *fop)
     LOCK(&fop->lock);
 
     GF_ASSERT (fop->refs > 0);
-    fop->refs++;
-    fop->jobs++;
+    fop->refs++;                // 引用+1， 产生了新的fop，新fop的父fop为该fop
+    fop->jobs++;                // job+1
 
     UNLOCK(&fop->lock);
 }
@@ -393,23 +393,23 @@ int32_t ec_check_complete(ec_fop_data_t * fop, ec_resume_f resume)
 
     GF_ASSERT(fop->resume == NULL);
 
-    if (--fop->jobs != 0)
+    if (--fop->jobs != 0)   // 确保fop的handle执行完成？？？
     {
         ec_trace("WAIT", fop, "resume=%p", resume);
 
         fop->resume = resume;
     }
     else
-    {
+    {   // 否则出错，错误保存在error中， fop->error置为0
         error = fop->error;
-        fop->error = 0;
+        fop->error = 0;         // 为什么要赋值为0???
     }
 
     UNLOCK(&fop->lock);
 
     return error;
 }
-
+// jobs为1时， rusume操作会 在当前状态下 执行状态机，相当于异常重试操作
 void ec_resume(ec_fop_data_t * fop, int32_t error)
 {
     ec_resume_f resume = NULL;
@@ -441,7 +441,7 @@ void ec_resume(ec_fop_data_t * fop, int32_t error)
         resume(fop, error);
     }
 
-    ec_fop_data_release(fop);
+    ec_fop_data_release(fop);   // 这里为什么要释放fop呢，不会跟状态机里面的end状态下的release冲突吗，回来看
 }
 
 void ec_resume_parent(ec_fop_data_t * fop, int32_t error)
@@ -782,7 +782,7 @@ ec_lock_t *ec_lock_allocate(ec_fop_data_t *fop, loc_t *loc)
 
     if ((loc->inode == NULL) ||
         (gf_uuid_is_null(loc->gfid) && gf_uuid_is_null(loc->inode->gfid)))
-    {
+    {       // loc的gfid 和  loc->inode->gfid都为空，则无效值的错误
         gf_msg (fop->xl->name, GF_LOG_ERROR, EINVAL,
                 EC_MSG_INVALID_INODE,
                 "Trying to lock based on an invalid "
@@ -793,14 +793,14 @@ ec_lock_t *ec_lock_allocate(ec_fop_data_t *fop, loc_t *loc)
         return NULL;
     }
 
-    lock = mem_get0(ec->lock_pool);
+    lock = mem_get0(ec->lock_pool);         // 新的lock
     if (lock != NULL)
     {
-        lock->good_mask = -1ULL;
+        lock->good_mask = -1ULL;        // good_mask初始值全1
         INIT_LIST_HEAD(&lock->owners);
         INIT_LIST_HEAD(&lock->waiting);
         INIT_LIST_HEAD(&lock->frozen);
-        err = ec_loc_from_loc(fop->xl, &lock->loc, loc);
+        err = ec_loc_from_loc(fop->xl, &lock->loc, loc);        // 异常判断，并更新lock->loc.name， 参数xl用来打log
         if (err != 0) {
             mem_put(lock);
             lock = NULL;
@@ -834,6 +834,9 @@ void ec_lock_insert(ec_fop_data_t *fop, ec_lock_t *lock, uint32_t flags,
 
     /* This check is only prepared for up to 2 locks per fop. If more locks
      * are needed this must be changed. */
+    /*
+    此检查仅适用于每个 fop 最多 2 个锁。 如果需要更多的锁，这必须改变
+    */
     if ((fop->lock_count > 0) &&
         (ec_lock_compare(fop->locks[0].lock, lock) < 0)) {
         fop->first_lock = fop->lock_count;
@@ -841,6 +844,9 @@ void ec_lock_insert(ec_fop_data_t *fop, ec_lock_t *lock, uint32_t flags,
         /* When the first lock is added to the current fop, request lock
          * counts from locks xlator to be able to determine if there is
          * contention and release the lock sooner. */
+        /*
+            当第一个锁添加到当前 fop 时，从锁 xlator 请求锁计数，以便能够确定是否存在争用并尽快释放锁
+        */
         if (fop->xdata == NULL) {
             fop->xdata = dict_new();
             if (fop->xdata == NULL) {
@@ -848,22 +854,22 @@ void ec_lock_insert(ec_fop_data_t *fop, ec_lock_t *lock, uint32_t flags,
                 return;
             }
         }
-        if (dict_set_str(fop->xdata, GLUSTERFS_INODELK_DOM_COUNT,
+        if (dict_set_str(fop->xdata, GLUSTERFS_INODELK_DOM_COUNT,       // "glusterfs.inodelk-dom-count"
                          fop->xl->name) != 0) {
             ec_fop_set_error(fop, ENOMEM);
             return;
         }
     }
 
-    link = &fop->locks[fop->lock_count++];
+    link = &fop->locks[fop->lock_count++];                                  // 这里可能需要锁一次软链接
 
-    link->lock = lock;
+    link->lock = lock;                                                      // 
     link->fop = fop;
-    link->update[EC_DATA_TXN] = (flags & EC_UPDATE_DATA) != 0;
+    link->update[EC_DATA_TXN] = (flags & EC_UPDATE_DATA) != 0;              // update是否要更新数据和元数据
     link->update[EC_METADATA_TXN] = (flags & EC_UPDATE_META) != 0;
-    link->base = base;
+    link->base = base;                                                      // base的loc？？
 
-    lock->refs_pending++;
+    lock->refs_pending++;                                                   // 准备好的fop++
 }
 
 void ec_lock_prepare_inode_internal(ec_fop_data_t *fop, loc_t *loc,
@@ -871,21 +877,22 @@ void ec_lock_prepare_inode_internal(ec_fop_data_t *fop, loc_t *loc,
 {
     ec_lock_t *lock = NULL;
     ec_inode_t *ctx;
-
+    // 父fop不为空，理论上inode应该是准备好了的， error不为0， wind下来的inode不应该为空
     if ((fop->parent != NULL) || (fop->error != 0) || (loc->inode == NULL)) {
-        return;
+        return;             //loc->inode如果为空则直接return
     }
 
-    LOCK(&loc->inode->lock);
-
+    LOCK(&loc->inode->lock);    // 这个inode的lock锁的范围看起来有点大啊
+    // 如果 inode->_ctx[fop->xl->xl_key].xl == fop->xl, 说明inode的ctx存有ec xlator之前生成的ctx
+    // 从inode中取出ec xlator中的ec_inode_t* 类型的ctx指针
     ctx = __ec_inode_get(loc->inode, fop->xl);
-    if (ctx == NULL) {
+    if (ctx == NULL) {  // 取出了NULL，说明malloc的时候没内存了
         __ec_fop_set_error(fop, ENOMEM);
 
         goto unlock;
     }
 
-    if (ctx->inode_lock != NULL) {
+    if (ctx->inode_lock != NULL) {          // 之前fop ec_inode中的lock， 这里实现了复用lock
         lock = ctx->inode_lock;
 
         /* If there's another lock, make sure that it's not the same. Otherwise
@@ -893,15 +900,25 @@ void ec_lock_prepare_inode_internal(ec_fop_data_t *fop, loc_t *loc,
          *
          * This can only happen on renames where source and target names are
          * in the same directory. */
-        if ((fop->lock_count > 0) && (fop->locks[0].lock == lock)) {
+        /*
+            如果有另一把锁，请确保它不一样。 否则不要插入。
+            这只会发生在源和目标 名字 位于同一目录中的重命名 操作时。
+        */
+        // fop的lock数大于0， 并且fop的locks[0]里面的lock与inode->_ctx中的lock是同一个(同目录下的rename操作)
+        if ((fop->lock_count > 0) && (fop->locks[0].lock == lock)) {        // 新的fop->locks[0].lock在哪儿赋值的？？？回来看。可能是某个地方调用了两次本函数
             /* Combine data/meta updates */
-            fop->locks[0].update[EC_DATA_TXN] |= (flags & EC_UPDATE_DATA) != 0;
+            fop->locks[0].update[EC_DATA_TXN] |= (flags & EC_UPDATE_DATA) != 0; // 先做赋值右边的相等运算， 对于stat操作 |= 0 update值不变
             fop->locks[0].update[EC_METADATA_TXN] |=
-                                                 (flags & EC_UPDATE_META) != 0;
-
+                                                 (flags & EC_UPDATE_META) != 0; // query在后面
+/*
+8	相等运算符：==    !=	从左到右
+15	赋值运算符：
+     =         +=        -=       *=       /=      %=       &=       ^=      |=   
+   <<=      >>=	从右到左
+*/
             /* Only one base inode is allowed per fop, so there shouldn't be
              * overwrites here. */
-            if (base != NULL) {
+            if (base != NULL) {         // stat fop中改值为NULL
                 fop->locks[0].base = base;
             }
 
@@ -910,10 +927,10 @@ void ec_lock_prepare_inode_internal(ec_fop_data_t *fop, loc_t *loc,
 
         ec_trace("LOCK_INODELK", fop, "lock=%p, inode=%p. Lock already "
                                       "acquired", lock, loc->inode);
-
+        // 锁的复用
         goto insert;
     }
-
+    // 进入ec_lock_prepare_inode_internal 判断过 loc->inode 不应该为空。 更新lock->loc
     lock = ec_lock_allocate(fop, loc);
     if (lock == NULL) {
         goto unlock;
@@ -928,9 +945,10 @@ void ec_lock_prepare_inode_internal(ec_fop_data_t *fop, loc_t *loc,
     ctx->inode_lock = lock;
 
 insert:
+    // 新建一个锁， 放入fop->locks[fop->lock_count]中
     ec_lock_insert(fop, lock, flags, base);
 update_query:
-    lock->query |= (flags & EC_QUERY_INFO) != 0;
+    lock->query |= (flags & EC_QUERY_INFO) != 0;    // query标识
 unlock:
     UNLOCK(&loc->inode->lock);
 }
@@ -2470,33 +2488,35 @@ void ec_lock_reuse(ec_fop_data_t *fop)
         ec_lock_next_owner(&fop->locks[i], cbk, release);
     }
 }
-
+// 状态机
 void __ec_manager(ec_fop_data_t * fop, int32_t error)
 {
     ec_t *ec = fop->xl->private;
 
     do {
         ec_trace("MANAGER", fop, "error=%d", error);
-
+        // LK有关fop ture， 对于非must_wind类型的fop，判断挂掉的节点是否达到所容忍的范围，设置error
         if (!ec_must_wind (fop)) {
                 if (ec->xl_up_count < ec->fragments) {
                     error = ENOTCONN;
                 }
         }
-
+        // 出现error， 设置fop的error并将state值取相反数，对处理某些fop后续操作做一个异常的处理
         if (error != 0) {
-            fop->error = error;
+            fop->error = error;         // 重新赋值回去， 期间可能出现新的error ENOTCONN
             fop->state = -fop->state;
         }
-
+        // 状态到达终点
         if ((fop->state == EC_STATE_END) || (fop->state == -EC_STATE_END)) {
-            ec_fop_data_release(fop);
+            ec_fop_data_release(fop);   // 释放fop结构体的资源
 
             break;
         }
 
         /* At each state, fop must not be used anywhere else and there
          * shouldn't be any pending subfop going on. */
+        // 在每个状态， fop 不得在其他任何地方使用，也不应该有任何挂起的subfop
+        // fop_sleep时，jobs++
         GF_ASSERT(fop->jobs == 0);
 
         /* While the manager is running we need to avoid that subfops launched
@@ -2504,15 +2524,22 @@ void __ec_manager(ec_fop_data_t * fop, int32_t error)
          * has completed. This could lead to the same manager being executed
          * by two threads concurrently. ec_check_complete() will take care of
          * this reference. */
+        /* 当manager运行时，我们需要避免从它启动的 subfops 结束 并在 fop->handler 完成之前调用 ec_resume()。 
+          这可能会导致两个线程同时执行同一个manager。 ec_check_complete() 会处理这个情况。*/
         fop->jobs = 1;
+        /*
+            比如stat fop里面会产生一个inodelk的subfop，如果在inodelk对最后一个状态执行handler时，
+            什么地方调用了ec_resume,会导致两个线程执行同一个manager??
 
+        */
+        // 状态机运行
         fop->state = fop->handler(fop, fop->state);
         GF_ASSERT (fop->state >= 0);
 
         error = ec_check_complete(fop, __ec_manager);
-    } while (error >= 0);
+    } while (error >= 0);   // 此时经过ec_check_complete， error才是fop的error， fop的error为0
 }
-
+// 断言fop的jobs，winds，error
 void ec_manager(ec_fop_data_t * fop, int32_t error)
 {
     GF_ASSERT(fop->jobs == 0);

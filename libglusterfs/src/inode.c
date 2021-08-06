@@ -62,7 +62,7 @@ hash_dentry (inode_t *parent, const char *name, int mod)
         return ret;
 }
 
-
+// ????
 static int
 hash_gfid (uuid_t uuid, int mod)
 {
@@ -446,17 +446,17 @@ __inode_retire (inode_t *inode)
         }
 }
 
-
+// inode 上下文为空或者与xlator不相等返回-1， 相同会再做一次赋值操作？？
 static int
 __inode_get_xl_index (inode_t *inode, xlator_t *xlator)
 {
         int set_idx = -1;
 
         if ((inode->_ctx[xlator->xl_id].xl_key != NULL) &&
-            (inode->_ctx[xlator->xl_id].xl_key != xlator))
-                goto out;
+            (inode->_ctx[xlator->xl_id].xl_key != xlator))              // 这里inode _ctx  xl_key 与xlator的对应关系看起来还是dht xlator做的。。。不对就是在这里赋值的
+                goto out;                               // 当前xl_key不为空，且与当前xlator指针值不同，则出错了
 
-        set_idx = xlator->xl_id;
+        set_idx = xlator->xl_id;                        // 否则设置inode->_ctx[xlator->xl_id].xl_key为该xlator
         inode->_ctx[set_idx].xl_key = xlator;
 
 out:
@@ -504,7 +504,7 @@ __inode_unref (inode_t *inode)
         return inode;
 }
 
-
+// THIS加入inode的ctx中，ctx引用计数++
 static inode_t *
 __inode_ref (inode_t *inode)
 {
@@ -515,10 +515,10 @@ __inode_ref (inode_t *inode)
                 return NULL;
 
         this = THIS;
-
+        // inode无引用时
         if (!inode->ref) {
-                inode->table->lru_size--;
-                __inode_activate (inode);
+                inode->table->lru_size--;               // lru缓存-1
+                __inode_activate (inode);               // 当前inode活跃起来
         }
 
         /*
@@ -529,15 +529,21 @@ __inode_ref (inode_t *inode)
          * in inode table increases which is wrong. So just keep the ref
          * count as 1 always
          */
-        if (__is_root_gfid(inode->gfid) && inode->ref)
+        /*
+        根 inode 应始终位于 inode 表的活动列表中。 
+        所以根 inode 上的 unrefs 是无操作的。 如果我们不允许unrefs但允许refs，会导致refcount溢出，将inode删除并添加到active-list中，这很丑陋。 
+        inode 表中的 active_size（检查 __inode_activate）增加这是错误的。 所以只需将引用计数始终保持为 1
+        跟目录 inode_ref操作， 回来看???
+        */
+        if (__is_root_gfid(inode->gfid) && inode->ref)  // 跟节点inode且引用计数不为0，直接返回不再做ref+1操作
                 return inode;
 
         inode->ref++;
 
-        index = __inode_get_xl_index (inode, this);
+        index = __inode_get_xl_index (inode, this);     // inode 上下文为空或者与this不相等返回-1, 否则更新ctx
         if (index >= 0) {
-                inode->_ctx[index].xl_key = this;
-                inode->_ctx[index].ref++;
+                inode->_ctx[index].xl_key = this;       // 重复操作， __inode_get_xl_index函数更新过了
+                inode->_ctx[index].ref++;               // 引用计数+1
         }
 
         return inode;
@@ -565,7 +571,7 @@ inode_unref (inode_t *inode)
         return inode;
 }
 
-
+// THIS加入inode的ctx中，ctx引用计数++
 inode_t *
 inode_ref (inode_t *inode)
 {
@@ -757,7 +763,7 @@ __inode_forget (inode_t *inode, uint64_t nlookup)
         return inode;
 }
 
-
+// 根据父级目录的inode_t和要查找当前文件名name， 计算hash，在table->name_hash[hash]中查找，找到entry就返回
 dentry_t *
 __dentry_grep (inode_table_t *table, inode_t *parent, const char *name)
 {
@@ -780,7 +786,7 @@ __dentry_grep (inode_table_t *table, inode_t *parent, const char *name)
         return dentry;
 }
 
-
+// 在table找parent下名为name的inode，类似于posix系统调用相对路径的接口
 inode_t *
 inode_grep (inode_table_t *table, inode_t *parent, const char *name)
 {
@@ -796,20 +802,20 @@ inode_grep (inode_table_t *table, inode_t *parent, const char *name)
 
         pthread_mutex_lock (&table->lock);
         {
-                dentry = __dentry_grep (table, parent, name);
+                dentry = __dentry_grep (table, parent, name);   // 根据父级目录的inode和当前文件名bname 在table->name_hash中查找目录项
 
                 if (dentry)
-                        inode = dentry->inode;
+                        inode = dentry->inode;                  // 如果找到了，dentry的inode为所招文件的inode
 
                 if (inode)
-                        __inode_ref (inode);
+                        __inode_ref (inode);                    // 引用+1
         }
         pthread_mutex_unlock (&table->lock);
 
         return inode;
 }
 
-
+// 在table中根据path找到inode， path为绝对路径。 方法是由根目录开始层层查找
 inode_t *
 inode_resolve (inode_table_t *table, char *path)
 {
@@ -821,10 +827,16 @@ inode_resolve (inode_table_t *table, char *path)
         }
 
         parent = inode_ref (table->root);
-        str = tmp = gf_strdup (path);
+        str = tmp = gf_strdup (path);           // 拷贝一下新的str
 
         while (1) {
                 bname = strtok_r (str, "/", &saveptr);
+                /*
+                为char *strtok_r(char *str, const char *delim, char **saveptr);
+strtok_r函数是strtok函数的可重入版本。str为要分解的字符串，delim为分隔符字符串。char **saveptr参数是一个指向char *的指针变量，用来在strtok_r内部保存切分时的上下文，以应对连续调用分解相同源字符串。
+第一次调用strtok_r时，str参数必须指向待提取的字符串，saveptr参数的值可以忽略。连续调用时，str赋值为NULL，saveptr为上次调用后返回的值，不要修改。一系列不同的字符串可能会同时连续调用strtok_r进行提取，要为不同的调用传递不同的saveptr参数。
+strtok_r实际上就是将strtok内部隐式保存的this指针，以参数的形式与函数外部进行交互。由调用者进行传递、保存甚至是修改。需要调用者在连续切分相同源字符串时，除了将str参数赋值为NULL，还要传递上次切分时保存下的saveptr。
+                */
                 if (bname == NULL) {
                         break;
                 }
@@ -832,9 +844,9 @@ inode_resolve (inode_table_t *table, char *path)
                 if (inode != NULL) {
                         inode_unref (inode);
                 }
-
+                // 找到inode
                 inode = inode_grep (table, parent, bname);
-                if (inode == NULL) {
+                if (inode == NULL) {            // 查找失败
                         break;
                 }
 
@@ -899,7 +911,7 @@ __is_root_gfid (uuid_t gfid)
         return _gf_false;
 }
 
-
+// 在table中根据gfid找到对应的inode 
 inode_t *
 __inode_find (inode_table_t *table, uuid_t gfid)
 {
@@ -918,7 +930,7 @@ __inode_find (inode_table_t *table, uuid_t gfid)
                 return table->root;
 
         hash = hash_gfid (gfid, 65536);
-
+        // 遍历对应的桶
         list_for_each_entry (tmp, &table->inode_hash[hash], hash) {
                 if (gf_uuid_compare (tmp->gfid, gfid) == 0) {
                         inode = tmp;
@@ -930,7 +942,7 @@ out:
         return inode;
 }
 
-
+// 在table中根据gfid找inode
 inode_t *
 inode_find (inode_table_t *table, uuid_t gfid)
 {
@@ -945,9 +957,9 @@ inode_find (inode_table_t *table, uuid_t gfid)
 
         pthread_mutex_lock (&table->lock);
         {
-                inode = __inode_find (table, gfid);
+                inode = __inode_find (table, gfid);             // 找inode
                 if (inode)
-                        __inode_ref (inode);
+                        __inode_ref (inode);    // inode 的引用计数+1， THIS绑定inode的ctx 并且对ctx->refs+1
         }
         pthread_mutex_unlock (&table->lock);
 
@@ -2068,12 +2080,12 @@ __inode_ctx_get2 (inode_t *inode, xlator_t *xlator, uint64_t *value1,
 
         if (!inode || !xlator || !inode->_ctx)
                 goto out;
-
+        // inode_ctx的索引id
         index = xlator->xl_id;
-        if (inode->_ctx[index].xl_key != xlator)
+        if (inode->_ctx[index].xl_key != xlator)                // 这里比较关系可能是在dht xlator做的....这里比较关系是在当前层自己处理的=，用来给某一层存放自己的inode ctx
                 goto out;
 
-        if (inode->_ctx[index].value1) {
+        if (inode->_ctx[index].value1) {                        // value1指针不为空
                 if (value1) {
                         *value1 = inode->_ctx[index].value1;
                         ret = 0;

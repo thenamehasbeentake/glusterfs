@@ -263,7 +263,7 @@ struct _ec_lock_link {
 /* EC xlator data structure to collect all the data required to perform
  * the file operation.*/
 struct _ec_fop_data {
-    int32_t            id;           /* ID of the file operation */
+    int32_t            id;           /* ID of the file operation */ // fop的id编号
     int32_t            refs;
     int32_t            state;
     int32_t            minimum;      /* Mininum number of successful
@@ -274,9 +274,9 @@ struct _ec_fop_data {
     int32_t            jobs;
     int32_t            error;
     ec_fop_data_t     *parent;
-    xlator_t          *xl;           /* points to EC xlator */
-    call_frame_t      *req_frame;    /* frame of the calling xlator */
-    call_frame_t      *frame;        /* frame used by this fop */
+    xlator_t          *xl;           /* points to EC xlator */  //执行该fop的xlator
+    call_frame_t      *req_frame;    /* frame of the calling xlator */  // 执行该fop请求的frame
+    call_frame_t      *frame;        /* frame used by this fop */       // 当前fop自己的frame
     struct list_head   cbk_list;     /* sorted list of groups of answers */
     struct list_head   answer_list;  /* list of answers */
     struct list_head   pending_list; /* member of ec_t.pending_fops */
@@ -287,7 +287,7 @@ struct _ec_fop_data {
     int32_t            first_lock;
     gf_lock_t          lock;
 
-    uint32_t           flags;
+    uint32_t           flags;       // 锁类型， 如EC_FLAG_LOCK_SHARED
     uint32_t           first;
     uintptr_t          mask;
     uintptr_t          healing; /*Dispatch is done but call is successful only

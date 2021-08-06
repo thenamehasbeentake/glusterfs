@@ -38,10 +38,10 @@ struct _inode_table {
         pthread_mutex_t    lock;
         size_t             hashsize;    /* bucket size of inode hash and dentry hash */
         char              *name;        /* name of the inode table, just for gf_log() */
-        inode_t           *root;        /* root directory inode, with number 1 */
+        inode_t           *root;        /* root directory inode, with number 1 */  // 根目录的inode，值为1
         xlator_t          *xl;          /* xlator to be called to do purge */
         uint32_t           lru_limit;   /* maximum LRU cache size */
-        struct list_head  *inode_hash;  /* buckets for inode hash table */
+        struct list_head  *inode_hash;  /* buckets for inode hash table */      // hash表的桶， 应该是拉链法
         struct list_head  *name_hash;   /* buckets for dentry hash table */
         struct list_head   active;      /* list of inodes currently active (in an fop) */
         uint32_t           active_size; /* count of inodes in active list */
@@ -69,7 +69,7 @@ struct _dentry {
 struct _inode_ctx {
         union {
                 uint64_t    key;
-                xlator_t   *xl_key;
+                xlator_t   *xl_key;             // index = xlator->xl_id; inode->_ctx[index].xl_key == xlator。  首次使用先get， get失败再设置初值供下次使用
         };
         /* if value1 is 0, then field is not set.. */
         union {

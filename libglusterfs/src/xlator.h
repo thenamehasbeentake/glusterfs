@@ -957,7 +957,7 @@ struct _xlator {
         char               *volfile_id;
 
         /* Its used as an index to inode_ctx*/
-        uint32_t            xl_id;
+        uint32_t            xl_id;              // 做为inode_ctx的索引使用
 };
 
 typedef struct {
