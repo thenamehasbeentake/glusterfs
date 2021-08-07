@@ -766,7 +766,7 @@ loc_wipe (loc_t *loc)
 {
         if (loc->inode) {
                 inode_unref (loc->inode);
-                loc->inode = NULL;
+                loc->inode = NULL;              // 好习惯？
         }
         if (loc->path) {
                 GF_FREE ((char *)loc->path);

@@ -108,7 +108,7 @@ gf_timer_call_cancel (glusterfs_ctx_t *ctx,
 
         LOCK (&reg->lock);
         {
-                // 已经执行了，就不能取消了
+                // 已经执行了，就不能取消了， 返回-1
                 fired = event->fired;
                 if (fired)
                         goto unlock;

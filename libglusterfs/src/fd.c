@@ -891,9 +891,9 @@ __fd_ctx_set (fd_t *fd, xlator_t *xlator, uint64_t value)
                 }
         }
 
-        if (set_idx == -1) {
-                set_idx = fd->xl_count;
-
+        if (set_idx == -1) {            // 全用完了，扩容xlator->graph->xl_count
+                set_idx = fd->xl_count;         // fd->xl_count当前的 fd对应的xlator索引，对应_ctx的size
+                // 这两个fd->xl_count和xlator->graph->xl_count不太清楚是干啥用的
                 new_xl_count = fd->xl_count + xlator->graph->xl_count;
 
                 tmp = GF_REALLOC (fd->_ctx,
@@ -917,7 +917,7 @@ __fd_ctx_set (fd_t *fd, xlator_t *xlator, uint64_t value)
                 fd->xl_count = new_xl_count;
         }
 
-        fd->_ctx[set_idx].xl_key = xlator;
+        fd->_ctx[set_idx].xl_key = xlator;              // 找到可用的，或者扩容后新的 ctx , 对xl_key赋值
         fd->_ctx[set_idx].value1  = value;
 
 out:
@@ -954,17 +954,17 @@ __fd_ctx_get (fd_t *fd, xlator_t *xlator, uint64_t *value)
 
         if (!fd || !xlator)
                 return -1;
-
+        // 遍历fd->_ctx中查找
         for (index = 0; index < fd->xl_count; index++) {
                 if (fd->_ctx[index].xl_key == xlator)
                         break;
         }
-
+        // 没找到
         if (index == fd->xl_count) {
                 ret = -1;
                 goto out;
         }
-
+        // 否则找到了
         if (value)
                 *value = fd->_ctx[index].value1;
 

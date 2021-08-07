@@ -135,7 +135,7 @@ struct _ec_fd {
     loc_t     loc;
     uintptr_t open;
     int32_t   flags;
-    ec_fd_status_t fd_status[0];
+    ec_fd_status_t fd_status[0];    // ec->nodes个ec_fd_status_t， 初始化时匿名状态状态为open
 };
 
 struct _ec_inode {
@@ -216,12 +216,12 @@ struct _ec_lock {
 
     /* List of owners of this lock. All fops added to this list are running
      * concurrently. */
-    struct list_head   owners;
+    struct list_head   owners;      // owner列表  指向fop->locks[0].owner_list
 
     /* List of fops waiting to be an owner of the lock. Fops are added to this
      * list when the current owner has an incompatible access (shared vs
      * exclusive) or the lock is not acquired yet. */
-    struct list_head   waiting;
+    struct list_head   waiting;     // 等待列表
 
     /* List of fops that will wait until the next unlock/lock cycle. This
      * happens when the currently acquired lock is decided to be released as
@@ -229,13 +229,13 @@ struct _ec_lock {
      * after the lock is reacquired. */
     struct list_head   frozen;
 
-    int32_t            exclusive;
+    int32_t            exclusive;       // 独占
     uintptr_t          mask;
     uintptr_t          good_mask;
     uintptr_t          healing;
-    uint32_t           refs_owners;  /* Refs for fops owning the lock */
+    uint32_t           refs_owners;  /* Refs for fops owning the lock */    // fop的owner
     uint32_t           refs_pending; /* Refs assigned to fops being prepared */
-    gf_boolean_t       acquired;
+    gf_boolean_t       acquired;                // 什么意思
     gf_boolean_t       getting_xattr;
     gf_boolean_t       unlock_now;
     gf_boolean_t       release;

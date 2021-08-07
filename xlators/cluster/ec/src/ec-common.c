@@ -442,6 +442,7 @@ void ec_resume(ec_fop_data_t * fop, int32_t error)
     }
 
     ec_fop_data_release(fop);   // 这里为什么要释放fop呢，不会跟状态机里面的end状态下的release冲突吗，回来看
+                                // 在ec_manager_stat中，这里没有释放fop，只是把ref-1。因为生成subfop时会当前fop变成parent，ref+1
 }
 
 void ec_resume_parent(ec_fop_data_t * fop, int32_t error)
@@ -826,7 +827,7 @@ int32_t ec_lock_compare(ec_lock_t * lock1, ec_lock_t * lock2)
 {
     return gf_uuid_compare(lock1->loc.gfid, lock2->loc.gfid);
 }
-
+// ???
 void ec_lock_insert(ec_fop_data_t *fop, ec_lock_t *lock, uint32_t flags,
                     loc_t *base)
 {
@@ -839,7 +840,7 @@ void ec_lock_insert(ec_fop_data_t *fop, ec_lock_t *lock, uint32_t flags,
     */
     if ((fop->lock_count > 0) &&
         (ec_lock_compare(fop->locks[0].lock, lock) < 0)) {
-        fop->first_lock = fop->lock_count;
+        fop->first_lock = fop->lock_count;      // 里面已经有一个锁， 且新加的锁与原来锁 绑定不同的loc, first_loc值改为1
     } else {
         /* When the first lock is added to the current fop, request lock
          * counts from locks xlator to be able to determine if there is
@@ -994,7 +995,7 @@ void ec_lock_prepare_fd(ec_fop_data_t *fop, fd_t *fd, uint32_t flags)
     if (fop->error != 0) {
         return;
     }
-
+    // 从fd保存的ctx中取出loc，拷贝并更新到loc
     err = ec_loc_from_fd(fop->xl, &loc, fd);
     if (err != 0) {
         ec_fop_set_error(fop, -err);
@@ -1555,27 +1556,28 @@ ec_lock_update_fd(ec_lock_t *lock, ec_fop_data_t *fop)
         lock->fd = __fd_ref(fop->fd);
     }
 }
-
+// lock被占有，且遍历waiting链表取出fop是共享锁，将wait_list下的fop移到list的尾部，ower++，更新loc的fd
+// 一旦发现有非共享锁的fop，就break
 static void
 ec_lock_wake_shared(ec_lock_t *lock, struct list_head *list)
 {
     ec_fop_data_t *fop;
     ec_lock_link_t *link;
     gf_boolean_t exclusive = _gf_false;
-
+    // lock->waiting不为空
     while (!exclusive && !list_empty(&lock->waiting)) {
         link = list_entry(lock->waiting.next, ec_lock_link_t, wait_list);
-        fop = link->fop;
+        fop = link->fop;    // 取出锁等待列表的fop
 
         /* If lock is not acquired, at most one fop can be assigned as owner.
          * The following fops will need to wait in the lock->waiting queue
          * until the lock has been fully acquired. */
-        exclusive = !lock->acquired;
+        exclusive = !lock->acquired;        // lock没有被占有，就排他， 回来看
 
         /* If the fop is not shareable, only this fop can be assigned as owner.
          * Other fops will need to wait until this one finishes. */
         if ((fop->flags & EC_FLAG_LOCK_SHARED) == 0) {
-            exclusive = _gf_true;
+            exclusive = _gf_true;           // 非共享，就排他
 
             /* Avoid other requests to be assigned as owners. */
             lock->exclusive = 1;
@@ -1583,7 +1585,7 @@ ec_lock_wake_shared(ec_lock_t *lock, struct list_head *list)
 
         /* If only one fop is allowed, it can be assigned as the owner of the
          * lock only if there weren't any other owner. */
-        if (exclusive && !list_empty(&lock->owners)) {
+        if (exclusive && !list_empty(&lock->owners)) {  // （锁没有被占用fop共享锁 或者 当前fop非共享锁）并且lock的占有者不为空  才break
             break;
         }
 
@@ -1595,17 +1597,17 @@ ec_lock_wake_shared(ec_lock_t *lock, struct list_head *list)
         ec_lock_update_fd(lock, fop);
     }
 }
-
+// 使用lock？  可能用到ec_xattrop 和 ec_lookup
 static void
 ec_lock_apply(ec_lock_link_t *link)
 {
-    ec_fop_data_t *fop = link->fop;
+    ec_fop_data_t *fop = link->fop;             // 取出fop
 
-    fop->mask &= link->lock->good_mask;
-    fop->locked++;
+    fop->mask &= link->lock->good_mask;         // 更新fop->mask
+    fop->locked++;                              // locked++, 当前fop加锁数++
 
-    ec_get_size_version(link);
-    ec_get_real_size(link);
+    ec_get_size_version(link);                  // 获取version，...
+    ec_get_real_size(link);                     // 获取真实大小
 }
 
 gf_boolean_t ec_lock_acquire(ec_lock_link_t *link);
@@ -1647,11 +1649,11 @@ void ec_lock_acquired(ec_lock_link_t *link)
 
     LOCK(&lock->loc.inode->lock);
 
-    lock->acquired = _gf_true;
+    lock->acquired = _gf_true;          // 获取锁
 
-    ec_lock_update_fd(lock, fop);
-    if ((fop->flags & EC_FLAG_LOCK_SHARED) != 0) {
-        ec_lock_wake_shared(lock, &list);
+    ec_lock_update_fd(lock, fop);       // fop->use_fd 
+    if ((fop->flags & EC_FLAG_LOCK_SHARED) != 0) {      // 当前fop使用的不是共享锁
+        ec_lock_wake_shared(lock, &list);               // 将lock.waiting链表中共享锁的fop取出来放到list里面
     }
 
     UNLOCK(&lock->loc.inode->lock);
@@ -1663,7 +1665,7 @@ void ec_lock_acquired(ec_lock_link_t *link)
         ec_fix_open(fop);
     }
 
-    ec_lock_resume_shared(&list);
+    ec_lock_resume_shared(&list);       // 处理waiting 链表里面使用共享锁的fop
 }
 
 int32_t ec_locked(call_frame_t *frame, void *cookie, xlator_t *this,
@@ -1699,18 +1701,18 @@ gf_boolean_t ec_lock_acquire(ec_lock_link_t *link)
     lock = link->lock;
     fop = link->fop;
 
-    if (!lock->acquired) {
-        set_lk_owner_from_ptr(&lk_owner, lock);
+    if (!lock->acquired) {      // 锁空闲。锁不是release状态有可能会到达该条件， 需要等待下一次加锁解锁周期
+        set_lk_owner_from_ptr(&lk_owner, lock);             // lk_owner存放lock的指针值
 
         ec_trace("LOCK_ACQUIRE", fop, "lock=%p, inode=%p", lock,
                  lock->loc.inode);
 
-        lock->flock.l_type = F_WRLCK;
+        lock->flock.l_type = F_WRLCK;           // 下一次的加锁周期？
         ec_inodelk(fop->frame, fop->xl, &lk_owner, -1, EC_MINIMUM_ALL,
                    ec_locked, link, fop->xl->name, &lock->loc, F_SETLKW,
                    &lock->flock, NULL);
 
-        return _gf_false;
+        return _gf_false;       // 返回失败
     }
 
     ec_trace("LOCK_REUSE", fop, "lock=%p", lock);
@@ -1719,7 +1721,11 @@ gf_boolean_t ec_lock_acquire(ec_lock_link_t *link)
 
     return _gf_true;
 }
-
+// 看不懂先不管， 回来看
+/*
+ * link ： 要被使用锁
+ * 
+ */
 static gf_boolean_t
 ec_lock_assign_owner(ec_lock_link_t *link)
 {
@@ -1733,37 +1739,45 @@ ec_lock_assign_owner(ec_lock_link_t *link)
     GF_ASSERT(list_empty(&link->wait_list));
 
     fop = link->fop;
-    lock = link->lock;
+    lock = link->lock;      // 取出其中的lock
 
-    LOCK(&lock->loc.inode->lock);
+    LOCK(&lock->loc.inode->lock);       // inode的锁
 
     /* Since the link has just been prepared but it's not active yet, the
      * refs_pending must be one at least (the ref owned by this link). */
     GF_ASSERT (lock->refs_pending > 0);
     /* The link is not pending any more. It will be assigned to the owner,
      * waiting or frozen list. */
-    lock->refs_pending--;
+    lock->refs_pending--;           // lock状态不再是pending
 
-    if (lock->release) {
+    if (lock->release) {            // lock 如果是release状态，link->wait_list放入lock->forzen中，当前fop等待下一轮解锁锁定周期，结束
         ec_trace("LOCK_QUEUE_FREEZE", fop, "lock=%p", lock);
 
         /* When lock->release is set, we'll unlock the lock as soon as
          * possible, meaning that we won't use a timer. */
+        // 当设置了 lock->release 时，我们会尽快解锁锁，这意味着我们不会使用计时器
         GF_ASSERT(lock->timer == NULL);
 
         /* The lock is marked to be released. We can still have owners and fops
-         * in the waiting ilist f they have been added before the lock has been
+         * in the waiting list if they have been added before the lock has been
          * marked to be released. However new fops are put into the frozen list
          * to wait for the next unlock/lock cycle. */
-        list_add_tail(&link->wait_list, &lock->frozen);
+         /*
+         锁被标记为要释放。 如果在锁定被标记为释放之前添加了所有者和 fops，我们仍然可以在等待列表中添加所有者和 fops。 
+         然而，新的 fop 被放入冻结列表以等待下一个解锁/锁定周期
+         */
+        list_add_tail(&link->wait_list, &lock->frozen);         // fop->wait_list放入lock->frozen尾
 
         goto unlock;
     }
 
     /* The lock is not marked to be released, so the frozen list should be
      * empty. */
+    // 锁没有被标记为释放，所以冻结列表应该是空的
     GF_ASSERT(list_empty(&lock->frozen));
-
+    // 锁还有timer在执行， 取消timer，取消失败说明timer处于fired状态，   当前timer里面的内容不做处理
+    // 取消成功，认为上一个fop执行结束，ref_owners--,
+    // 清空timer
     if (lock->timer != NULL) {
         /* We are trying to acquire a lock that has an unlock timer active.
          * This means that the lock must be idle, i.e. no fop can be in the
@@ -1772,6 +1786,12 @@ ec_lock_assign_owner(ec_lock_link_t *link)
          * and it must not be exclusive. There should only be one owner
          * reference, but it's possible that some fops are being prepared to
          * use this lock. */
+        /*
+        我们正在尝试获取一个具有激活解锁计时器的锁。 
+        这意味着锁必须是空闲的，即所有者、等待或冻结列表中不能有 fop。 
+        这也意味着锁不能被标记为被释放（这是在没有计时器的情况下完成的）并且它不能是独占的。 
+        应该只有一个所有者引用，但可能有一些人准备使用此锁。
+        */
         GF_ASSERT ((lock->exclusive == 0) && (lock->refs_owners == 1) &&
                    list_empty(&lock->owners) && list_empty(&lock->waiting));
 
@@ -1779,15 +1799,21 @@ ec_lock_assign_owner(ec_lock_link_t *link)
          * successful cancellation will destroy it. It must not be NULL
          * because it references the fop responsible for the delayed unlock
          * that we are currently trying to cancel. */
+        /*我们在取消计时器之前获取 timer_link，因为成功取消会破坏它。 它不能为 NULL，因为它引用了负责我们当前试图取消的延迟解锁的 fop*/
         timer_link = lock->timer->data;
         GF_ASSERT(timer_link != NULL);
-
-        if (gf_timer_call_cancel(fop->xl->ctx, lock->timer) < 0) {
+        // 取消glusterfs_ctx中的timer
+        if (gf_timer_call_cancel(fop->xl->ctx, lock->timer) < 0) {          // timer在状态是fired， return-1
             /* It's too late to avoid the execution of the timer callback.
              * Since we need to be sure that the callback has access to all
              * needed resources, we cannot resume the execution of the timer
              * fop now. This will be done in the callback.
              */
+            /*
+             避免执行计时器回调为时已晚。 由于我们需要确保回调可以访问所有需要的资源，因此我们现在无法恢复计时器 fop 的执行。 
+             这将在回调中完成
+             */
+            // 这里需要看一下为什么可以直接取消之前的fop，回来看
             timer_link = NULL;
         } else {
             /* The timer has been cancelled, so we need to release the owner
@@ -1795,7 +1821,10 @@ ec_lock_assign_owner(ec_lock_link_t *link)
              * can be the last reference, but we'll immediately increment it
              * for the current fop, so no need to check it.
              */
-            lock->refs_owners--;
+            /* 计时器已被取消，因此我们需要释放等待计时器的 fop 持有的所有者引用。 
+             * 这可以是最后一个引用，但我们会立即为当前 fop 增加它，所以不需要检查它
+             */
+            lock->refs_owners--;        // 注意上面GF_ASSERT的条件，当前情况下应该只有一个refs_owners
 
             ec_trace("UNLOCK_CANCELLED", timer_link->fop, "lock=%p", lock);
         }
@@ -1803,12 +1832,12 @@ ec_lock_assign_owner(ec_lock_link_t *link)
         /* We have two options here:
          *
          * 1. The timer has been successfully cancelled.
-         *
+         *      timer被成功取消，处理起来简单，我们继续获取lock
          *    This is the easiest case and we can continue with the currently
          *    acquired lock.
          *
          * 2. The timer callback has already been fired.
-         *
+         *      timer的回调已经被fired了
          *    In this case we have not been able to cancel the timer before
          *    the timer callback has been fired, but we also know that
          *    lock->timer != NULL. This means that the timer callback is still
@@ -1817,34 +1846,43 @@ ec_lock_assign_owner(ec_lock_link_t *link)
          *    lock->timer. This will cause that the timer callback does nothing
          *    once it acquires the mutex.
          */
-        lock->timer = NULL;
+        /*
+         * 在这种情况下，我们无法在触发计时器回调之前取消计时器，但我们也知道 lock->timer != NULL。 
+         * 这意味着计时器回调仍在尝试获取我们当前拥有的 inode 互斥锁。 
+         * 我们是安全的，直到我们释放它。 在这种情况下，我们可以安全地清除 lock->timer。 
+         * 这将导致计时器回调在获取互斥锁后不执行任何操作。
+        */
+        lock->timer = NULL;                     // ？？？
     }
-
-    lock->exclusive |= (fop->flags & EC_FLAG_LOCK_SHARED) == 0;
-
+    // 更新锁的独占状态
+    lock->exclusive |= (fop->flags & EC_FLAG_LOCK_SHARED) == 0;         // 为什么用 |= ??  old与当前的fop有一个独占，锁就变成独占锁了
+    // 如果当前锁还有其他拥有者，独占锁并且当前锁已经被之前fop获取，才可以继续执行，否则将当前fop放入lock->waiting链表中
     if (!list_empty(&lock->owners)) {
         /* There are other owners of this lock. We can only take ownership if
          * the lock is already acquired and can be shared. Otherwise we need
          * to wait. */
-        if (!lock->acquired || (lock->exclusive != 0)) {
+        /*
+         * 这把锁还有其他所有者。 只有在已经获得锁并且可以共享的情况下，我们才能获得所有权。 否则我们需要等待
+        */
+        if (!lock->acquired || (lock->exclusive != 0)) {        // 锁没有被获取  或者 锁是独占的， 锁没人用，或者锁是独占的
             ec_trace("LOCK_QUEUE_WAIT", fop, "lock=%p", lock);
 
-            list_add_tail(&link->wait_list, &lock->waiting);
+            list_add_tail(&link->wait_list, &lock->waiting);    // 把link->wait_list加入lock->waiting末尾
 
             goto unlock;
-        }
+        } // 共享锁 并且 锁已经被获取了
     }
-
+    // 把link->owner_list加入lock->owners末尾
     list_add_tail(&link->owner_list, &lock->owners);
-    lock->refs_owners++;
+    lock->refs_owners++;    // 加入了当前的fop
 
     assigned = _gf_true;
 
 unlock:
-    if (!assigned) {
+    if (!assigned) {    // 获取锁失败(1. 锁是release状态，2.有其他拥有者 并且 锁没有被获取 或者 锁不是共享锁)， 当前fop sleep
         /* We have not been able to take ownership of this lock. The fop must
          * be put to sleep. */
-        ec_sleep(fop);
+        ec_sleep(fop);  // 没有拿到锁， sleep当前fop
     }
 
     UNLOCK(&lock->loc.inode->lock);
@@ -1852,7 +1890,7 @@ unlock:
     /* If we have cancelled the timer, we need to resume the fop that was
      * waiting for it. */
     if (timer_link != NULL) {
-        ec_resume(timer_link->fop, 0);
+        ec_resume(timer_link->fop, 0);      // resume 锁里面timer的fop，在我们拿到这个lock的时候，它既没有fired
     }
 
     return assigned;
@@ -1923,12 +1961,15 @@ void ec_lock(ec_fop_data_t *fop)
      * function when it calls ec_sleep so do ec_sleep at start and ec_resume at
      * the end of this function.*/
     ec_sleep (fop);
-
+    // fop->lock_count最多为2? 重复使用lock的时候，locked可能会小于lock_count
     while (fop->locked < fop->lock_count) {
         /* Since there are only up to 2 locks per fop, this xor will change
          * the order of the locks if fop->first_lock is 1. */
+        // 比如lock_count=2, lockerd= 1, first_lock=1, 那就说明fop->locks[0]将要被复用？
         link = &fop->locks[fop->locked ^ fop->first_lock];
-
+        //      1.   ec_lock_assign_owner获取锁失败(1. 锁是release状态，2.有其他拥有者 并且 锁没有被获取 或者 锁不是共享锁)， 当前fop sleep
+        // 或者  2.   
+        // 跳出循环
         if (!ec_lock_assign_owner(link) || !ec_lock_acquire(link)) {
             break;
         }

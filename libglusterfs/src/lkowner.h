@@ -39,9 +39,9 @@ set_lk_owner_from_ptr (gf_lkowner_t *lkowner, void *data)
 {
         int i = 0;
         int j = 0;
-
+        // unsigned long,  8个字节
         lkowner->len = sizeof (unsigned long);
-        for (i = 0, j = 0; i < lkowner->len; i++, j += 8) {
+        for (i = 0, j = 0; i < lkowner->len; i++, j += 8) {     // 分别将8个字节存放在lkonwer->data中，大端
                 lkowner->data[i] =  (char)((((unsigned long)data) >> j) & 0xff);
         }
 }

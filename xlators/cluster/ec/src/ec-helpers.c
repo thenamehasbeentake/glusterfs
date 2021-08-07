@@ -648,7 +648,7 @@ int32_t ec_loc_update(xlator_t *xl, loc_t *loc, inode_t *inode,
 out:
     return ret;
 }
-
+// 这里的fd中应该会保存ctx
 int32_t ec_loc_from_fd(xlator_t * xl, loc_t * loc, fd_t * fd)
 {
     ec_fd_t * ctx;
@@ -656,14 +656,14 @@ int32_t ec_loc_from_fd(xlator_t * xl, loc_t * loc, fd_t * fd)
 
     memset(loc, 0, sizeof(*loc));
 
-    ctx = ec_fd_get(fd, xl);
+    ctx = ec_fd_get(fd, xl);        // 从fd->_ctx中获取之前保存的ctx， 或者malloc一个新的， xl作为fd->_ctx中的xl_key
     if (ctx != NULL) {
-        if (loc_copy(loc, &ctx->loc) != 0) {
+        if (loc_copy(loc, &ctx->loc) != 0) {        // fd保存的ctx
             goto out;
         }
     }
 
-    ret = ec_loc_update(xl, loc, fd->inode, NULL);
+    ret = ec_loc_update(xl, loc, fd->inode, NULL);      //  更新
     if (ret != 0) {
         goto out;
     }
@@ -767,14 +767,14 @@ ec_fd_t * __ec_fd_get(fd_t * fd, xlator_t * xl)
 
             for (i = 0; i < ec->nodes; i++) {
                 if (fd_is_anonymous (fd)) {
-                        ctx->fd_status[i] = EC_FD_OPENED;
+                        ctx->fd_status[i] = EC_FD_OPENED;       // 匿名文件状态为打开
                 } else {
                         ctx->fd_status[i] = EC_FD_NOT_OPENED;
                 }
             }
 
-            value = (uint64_t)(uintptr_t)ctx;
-            if (__fd_ctx_set(fd, xl, value) != 0) {
+            value = (uint64_t)(uintptr_t)ctx;               // fd->_ctx的value 包含了所有节点的上下文
+            if (__fd_ctx_set(fd, xl, value) != 0) {         // 在fd->_ctx 数组中找一个空闲的设置，或者有相同的xl_key,覆盖
                 GF_FREE (ctx);
                 return NULL;
             }
@@ -788,7 +788,7 @@ ec_fd_t * __ec_fd_get(fd_t * fd, xlator_t * xl)
         /* Mark the fd open for all subvolumes. */
         ctx->open = -1;
         /* Try to populate ctx->loc with fd->inode information. */
-        ec_loc_update(xl, &ctx->loc, fd->inode, NULL);
+        ec_loc_update(xl, &ctx->loc, fd->inode, NULL);      // 这里对旧的ctx，更新loc。 新malloc的ctx， loc为空
     }
 
     return ctx;
