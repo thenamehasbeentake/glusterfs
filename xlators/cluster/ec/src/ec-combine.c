@@ -220,7 +220,7 @@ void ec_iatt_rebuild(ec_t * ec, struct iatt * iatt, int32_t count,
 
     while (count-- > 0)
     {
-        blocks = iatt[count].ia_blocks * ec->fragments + answers - 1;
+        blocks = iatt[count].ia_blocks * ec->fragments + answers - 1;           // answers是啥？ fragments是数据brick数，ia_blocks是512*个数， 相乘为block实际文件的大小。
         blocks /= answers;
         iatt[count].ia_blocks = blocks;
     }
@@ -261,7 +261,8 @@ ec_value_ignore (char *key)
         }
         return _gf_false;
 }
-
+// 比较字典中GF_XATTR_STIME_PATTERN、GET_LINK_COUNT是否相等
+// 跳过ec_value_ignore为true的比较
 int32_t
 ec_dict_compare (dict_t *dict1, dict_t *dict2)
 {
@@ -750,7 +751,7 @@ int32_t ec_dict_combine(ec_cbk_data_t * cbk, int32_t which)
 
     dict = (which == EC_COMBINE_XDATA) ? cbk->xdata : cbk->dict;
     if (dict != NULL) {
-        err = dict_foreach(dict, ec_dict_data_combine, &data);
+        err = dict_foreach(dict, ec_dict_data_combine, &data);          // 字典的合并
         if (err != 0) {
             gf_msg (cbk->fop->xl->name, GF_LOG_ERROR, -err,
                     EC_MSG_DICT_COMBINE_FAIL,
@@ -871,7 +872,7 @@ int32_t ec_combine_check(ec_cbk_data_t * dst, ec_cbk_data_t * src,
 {
     ec_fop_data_t * fop = dst->fop;
 
-    if (dst->op_ret != src->op_ret)
+    if (dst->op_ret != src->op_ret)                     // 返回值是否匹配
     {
         gf_msg_debug (fop->xl->name, 0, "Mismatching return code in "
                                             "answers of '%s': %d <-> %d",
@@ -903,7 +904,7 @@ int32_t ec_combine_check(ec_cbk_data_t * dst, ec_cbk_data_t * src,
 
     if ((dst->op_ret >= 0) && (combine != NULL))
     {
-        return combine(fop, dst, src);
+        return combine(fop, dst, src);              // 对iatt做合并
     }
 
     return 1;
@@ -919,9 +920,9 @@ void ec_combine (ec_cbk_data_t *newcbk, ec_combine_f combine)
 
     LOCK(&fop->lock);
 
-    fop->received |= newcbk->mask;
+    fop->received |= newcbk->mask;                      // fop->received fop已经完成的brick， |当前回调的brick
 
-    item = fop->cbk_list.prev;
+    item = fop->cbk_list.prev;                          // 为什么是prev？？回来看
     list_for_each_entry(cbk, &fop->cbk_list, list)
     {
         if (ec_combine_check(newcbk, cbk, combine))
@@ -946,13 +947,13 @@ void ec_combine (ec_cbk_data_t *newcbk, ec_combine_f combine)
             break;
         }
     }
-    list_add(&newcbk->list, item);
+    list_add(&newcbk->list, item);              // 合并结果放到fop->cbk_list.prev
 
     ec_trace("ANSWER", fop, "combine=%s[%d]",
              ec_bin(str, sizeof(str), newcbk->mask, 0), newcbk->count);
 
     cbk = list_entry(fop->cbk_list.next, ec_cbk_data_t, list);
-    if ((fop->mask ^ fop->remaining) == fop->received) {
+    if ((fop->mask ^ fop->remaining) == fop->received) {        // ec_dispatch_all不考虑
         needed = fop->minimum - cbk->count;
     }
 

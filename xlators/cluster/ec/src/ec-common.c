@@ -482,13 +482,16 @@ void ec_complete(ec_fop_data_t * fop)
 
     ec_trace("COMPLETE", fop, "");
 
-    if (--fop->winds == 0) {
+    if (--fop->winds == 0) {        // winds全都unwind回来了
         if (fop->answer == NULL) {
             if (!list_empty(&fop->cbk_list)) {
                 cbk = list_entry(fop->cbk_list.next, ec_cbk_data_t, list);
                 healing_count = gf_bits_count (cbk->mask & fop->healing);
                     /* fop shouldn't be treated as success if it is not
                      * successful on at least fop->minimum good copies*/
+                    /*
+                     如果 fop 至少在 fop->minimum good 副本上不成功，则不应将 fop 视为成功
+                    */
                 if ((cbk->count - healing_count) >= fop->minimum) {
                     fop->answer = cbk;
 
@@ -535,7 +538,7 @@ ec_must_wind (ec_fop_data_t *fop)
 
         return _gf_false;
 }
-
+// 判断fop是否是lock或者xattr有关的fop
 static gf_boolean_t
 ec_internal_op (ec_fop_data_t *fop)
 {
@@ -559,10 +562,17 @@ int32_t ec_child_select(ec_fop_data_t * fop)
     /* Wind the fop on same subvols as parent for any internal extra fops like
      * head/tail read in case of writev fop. Unlocks shouldn't do this because
      * unlock should go on all subvols where lock is performed*/
+    /*
+     在 writev fop 的情况下，对于任何内部额外的 fops（如头/尾读取），在与父级相同的 subvol 上 wind fop。
+     解锁不应该这样做，因为解锁应该在所有执行锁定的子卷上进行
+                writev -> read(offset) -> ..
+     cur fop                √
+    */
     if (fop->parent && !ec_internal_op (fop)) {
+            // 对于writev内部的readv op， read应该继承wirtev的mask并且不应该读正在修复的node
             fop->mask &= (fop->parent->mask & ~fop->parent->healing);
     }
-
+    // 有些brick挂掉了。 mask是要进行fop操作的brick， xl_up是up的brick
     if ((fop->mask & ~ec->xl_up) != 0)
     {
         gf_msg (fop->xl->name, GF_LOG_WARNING, 0,
@@ -659,10 +669,10 @@ void ec_dispatch_mask(ec_fop_data_t * fop, uintptr_t mask)
 
     ec_trace("EXECUTE", fop, "mask=%lX", mask);
 
-    fop->remaining ^= mask;
+    fop->remaining ^= mask;     // all means 0
 
-    fop->winds += count;
-    fop->refs += count;
+    fop->winds += count;        // wind到child xlator的个数
+    fop->refs += count;         // fop引用计数
 
     UNLOCK(&fop->lock);
 
@@ -671,7 +681,7 @@ void ec_dispatch_mask(ec_fop_data_t * fop, uintptr_t mask)
     {
         if ((mask & 1) != 0)
         {
-            fop->wind(ec, fop, idx);
+            fop->wind(ec, fop, idx);            // 对child xlator执行wind操作，idx表明这个第几个xlator
         }
         idx++;
         mask >>= 1;
@@ -687,7 +697,7 @@ void ec_dispatch_start(ec_fop_data_t * fop)
 
     if (fop->lock_count > 0)
     {
-        ec_owner_copy(fop->frame, &fop->req_frame->root->lk_owner);
+        ec_owner_copy(fop->frame, &fop->req_frame->root->lk_owner);         // 继承req fop的lock
     }
 }
 
@@ -744,10 +754,10 @@ ec_dispatch_all (ec_fop_data_t *fop)
         ec_dispatch_start(fop);
 
         if (ec_child_select(fop)) {
-                fop->expected = gf_bits_count(fop->remaining);
-                fop->first = 0;
+                fop->expected = gf_bits_count(fop->remaining);      // wind的child xlator个数
+                fop->first = 0;                                     // 从0开始？
 
-                ec_dispatch_mask(fop, fop->remaining);
+                ec_dispatch_mask(fop, fop->remaining);              // 根据检查好的child，wind下去
         }
 }
 
@@ -1658,7 +1668,7 @@ void ec_lock_acquired(ec_lock_link_t *link)
 
     UNLOCK(&lock->loc.inode->lock);
 
-    ec_lock_apply(link);
+    ec_lock_apply(link);            // 可能是ec_lock_wake_shared的原因？？为什么这里需要获取version和size，想一想场景
 
     if (fop->use_fd &&
         (link->update[EC_DATA_TXN] || link->update[EC_METADATA_TXN])) {

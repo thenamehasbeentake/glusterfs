@@ -1759,13 +1759,13 @@ int32_t ec_stat_cbk(call_frame_t * frame, void * cookie, xlator_t * this,
             }
         }
 
-        ec_combine(cbk, ec_combine_stat);
+        ec_combine(cbk, ec_combine_stat);           // 回调的合并
     }
 
 out:
     if (fop != NULL)
     {
-        ec_complete(fop);
+        ec_complete(fop);       // 检查fop是否结束了, 可能会执行resume操作
     }
 
     return 0;
@@ -1777,7 +1777,7 @@ void ec_wind_stat(ec_t * ec, ec_fop_data_t * fop, int32_t idx)
 
     STACK_WIND_COOKIE(fop->frame, ec_stat_cbk, (void *)(uintptr_t)idx,
                       ec->xl_list[idx], ec->xl_list[idx]->fops->stat,
-                      &fop->loc[0], fop->xdata);
+                      &fop->loc[0], fop->xdata);        // 分别wind到各个client xlator， idx表面其序号， ec_stat_cbk为rpc回调函数
 }
 // fop  stat的handle
 int32_t ec_manager_stat(ec_fop_data_t * fop, int32_t state)
@@ -1808,7 +1808,7 @@ int32_t ec_manager_stat(ec_fop_data_t * fop, int32_t state)
             cbk = ec_fop_prepare_answer(fop, _gf_true);
             if (cbk != NULL) {
                 if (cbk->iatt[0].ia_type == IA_IFREG) {
-                    ec_iatt_rebuild(fop->xl->private, cbk->iatt, 1,
+                    ec_iatt_rebuild(fop->xl->private, cbk->iatt, 1,             // iatt的合并
                                     cbk->count);
 
                     /* This shouldn't fail because we have the inode locked. */

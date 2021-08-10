@@ -59,7 +59,7 @@ ec_cbk_data_t * ec_cbk_data_allocate(call_frame_t * frame, xlator_t * this,
 
     cbk->fop = fop;
     cbk->idx = idx;
-    cbk->mask = 1ULL << idx;
+    cbk->mask = 1ULL << idx;                                    // 回调的brick
     cbk->count = 1;
     cbk->op_ret = op_ret;
     cbk->op_errno = op_errno;
@@ -67,7 +67,7 @@ ec_cbk_data_t * ec_cbk_data_allocate(call_frame_t * frame, xlator_t * this,
 
     LOCK(&fop->lock);
 
-    list_add_tail(&cbk->answer_list, &fop->answer_list);
+    list_add_tail(&cbk->answer_list, &fop->answer_list);        // 回调fop， answer_list加入回调的answer_list
 
     UNLOCK(&fop->lock);
 

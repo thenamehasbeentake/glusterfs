@@ -293,8 +293,8 @@ struct _ec_fop_data {
     uintptr_t          healing; /*Dispatch is done but call is successful only
                                   if fop->minimum number of subvolumes succeed
                                   which are not healing*/
-    uintptr_t          remaining;
-    uintptr_t          received; /* Mask of responses */
+    uintptr_t          remaining;           // fop对应的child xlator， 二进制表示
+    uintptr_t          received; /* Mask of responses */        // cbk的掩码
     uintptr_t          good;
 
     uid_t              uid;
@@ -561,7 +561,7 @@ struct _ec {
     int32_t            heal_waiters;
     int32_t            nodes;                /* Total number of bricks(n) */
     int32_t            bits_for_nodes;
-    int32_t            fragments;            /* Data bricks(k) */
+    int32_t            fragments;            /* Data bricks(k) */           // 数据brick
     int32_t            redundancy;           /* Redundant bricks(m) */
     uint32_t           fragment_size;        /* Size of fragment/chunk on a
                                                 brick. */
