@@ -280,6 +280,7 @@ do_iot_schedule (iot_conf_t *conf, call_stub_t *stub, int pri)
                 // iotwr线程超过idle时间后会结束，这里补充新的线程
                 ret = __iot_workers_scale (conf);
                 //新创建的线程由于conf->mutex会卡一会儿
+                // 新建的线程由于队列的size不为0，可以直接处理io请求
         }
         pthread_mutex_unlock (&conf->mutex);
 

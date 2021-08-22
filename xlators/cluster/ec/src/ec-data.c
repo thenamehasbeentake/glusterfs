@@ -312,7 +312,7 @@ void ec_fop_data_release(ec_fop_data_t * fop)
 
         ec = fop->xl->private;
         ec_handle_last_pending_fop_completion (fop, &notify);
-        ec_handle_healers_done (fop);
+        ec_handle_healers_done (fop);           // 这里看看怎么触发修复的， 队列里面，取出修复fop等待队列
         mem_put(fop);
         if (notify) {
             ec_pending_fops_completed(ec);
