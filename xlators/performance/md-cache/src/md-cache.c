@@ -32,54 +32,84 @@
 */
 
 struct mdc_statfs_cache {
-    pthread_mutex_t lock;
-    gf_boolean_t initialized;
-    struct timespec last_refreshed;
-    struct statvfs buf;
+    pthread_mutex_t lock;                   // 缓存互斥锁
+    gf_boolean_t initialized;               // 是否初始化
+    struct timespec last_refreshed;         // 上次刷新时间戳
+    struct statvfs buf;                     // cache
 };
+
+/*
+struct statvfs
+  {
+    unsigned long int f_bsize;
+    unsigned long int f_frsize;
+#ifndef __USE_FILE_OFFSET64
+    __fsblkcnt_t f_blocks;
+    __fsblkcnt_t f_bfree;
+    __fsblkcnt_t f_bavail;
+    __fsfilcnt_t f_files;
+    __fsfilcnt_t f_ffree;
+    __fsfilcnt_t f_favail;
+#else
+    __fsblkcnt64_t f_blocks;
+    __fsblkcnt64_t f_bfree;
+    __fsblkcnt64_t f_bavail;
+    __fsfilcnt64_t f_files;
+    __fsfilcnt64_t f_ffree;
+    __fsfilcnt64_t f_favail;
+#endif
+    unsigned long int f_fsid;
+#ifdef _STATVFSBUF_F_UNUSED
+    int __f_unused;
+#endif
+    unsigned long int f_flag;
+    unsigned long int f_namemax;
+    int __f_spare[6];
+  };
+*/
 
 struct mdc_statistics {
     gf_atomic_t stat_hit; /* No. of times lookup/stat was served from
-                             mdc */
+                             mdc */     // lookup/stat   mdc生效的次数
 
     gf_atomic_t stat_miss; /* No. of times valid stat wasn't present in
-                              mdc */
+                              mdc */    // mdc未命中的次数
 
     gf_atomic_t xattr_hit; /* No. of times getxattr was served from mdc,
                               Note: this doesn't count the xattr served
-                              from lookup */
+                              from lookup */    // getxattr 命中次数
 
-    gf_atomic_t xattr_miss;      /* No. of times xattr req was WIND from mdc */
-    gf_atomic_t negative_lookup; /* No. of negative lookups */
-    gf_atomic_t nameless_lookup; /* No. of negative lookups that were sent
+    gf_atomic_t xattr_miss;      /* No. of times xattr req was WIND from mdc */     // xattr请求从mdc wind下去的
+    gf_atomic_t negative_lookup; /* No. of negative lookups */                      // 无效的lookup
+    gf_atomic_t nameless_lookup; /* No. of negative lookups that were sent          // 无名的lookup，发送给brick
                                     to bricks */
 
-    gf_atomic_t stat_invals;  /* No. of invalidates received from upcall */
-    gf_atomic_t xattr_invals; /* No. of invalidates received from upcall */
-    gf_atomic_t need_lookup;  /* No. of lookups issued, because other
+    gf_atomic_t stat_invals;  /* No. of invalidates received from upcall */         // 从upcall收到的无效stat， iatt和xatt失效
+    gf_atomic_t xattr_invals; /* No. of invalidates received from upcall */         // 从upcall收到的无效xattr
+    gf_atomic_t need_lookup;  /* No. of lookups issued, because other               // 发出的lookup次数，由于其他xlator请求 明确的lookup
                                  xlators requested for explicit lookup */
 };
 
 struct mdc_conf {
-    int timeout;
-    gf_boolean_t cache_posix_acl;
-    gf_boolean_t cache_glusterfs_acl;
-    gf_boolean_t cache_selinux;
-    gf_boolean_t cache_capability;
-    gf_boolean_t cache_ima;
-    gf_boolean_t force_readdirp;
-    gf_boolean_t cache_swift_metadata;
-    gf_boolean_t cache_samba_metadata;
-    gf_boolean_t mdc_invalidation;
-    gf_boolean_t global_invalidation;
+    int timeout;                                // 超时
+    gf_boolean_t cache_posix_acl;               // 是否缓存posix 访问控制
+    gf_boolean_t cache_glusterfs_acl;           // 是否缓存glusterfs 访问控制
+    gf_boolean_t cache_selinux;                 // 是否缓存selinux
+    gf_boolean_t cache_capability;              // 是否缓存容量
+    gf_boolean_t cache_ima;                     // 
+    gf_boolean_t force_readdirp;                // 
+    gf_boolean_t cache_swift_metadata;          // swift 对象元数据
+    gf_boolean_t cache_samba_metadata;          // samba 网络共享元数据
+    gf_boolean_t mdc_invalidation;              // 缓存失效
+    gf_boolean_t global_invalidation;           // 全局失效
 
-    time_t last_child_down;
-    gf_lock_t lock;
-    struct mdc_statistics mdc_counter;
-    gf_boolean_t cache_statfs;
-    struct mdc_statfs_cache statfs_cache;
-    char *mdc_xattr_str;
-    gf_atomic_int32_t generation;
+    time_t last_child_down;                     // 上一次 child xlator挂掉的时间
+    gf_lock_t lock;                             // 锁
+    struct mdc_statistics mdc_counter;          // 缓存命中或者失效计数
+    gf_boolean_t cache_statfs;                  // 是否缓存statfs
+    struct mdc_statfs_cache statfs_cache;       // statvfs的缓存
+    char *mdc_xattr_str;                        // xattr
+    gf_atomic_int32_t generation;               // 一代？版本？
 };
 
 struct mdc_local;
@@ -99,29 +129,29 @@ typedef struct mdc_local mdc_local_t;
     } while (0)
 
 struct md_cache {
-    ia_prot_t md_prot;
-    uint32_t md_nlink;
-    uint32_t md_uid;
-    uint32_t md_gid;
-    uint32_t md_atime_nsec;
+    ia_prot_t md_prot;              // 权限
+    uint32_t md_nlink;              // link数
+    uint32_t md_uid;                // uid
+    uint32_t md_gid;                // gid
+    uint32_t md_atime_nsec;         // 时间戳
     uint32_t md_mtime_nsec;
     uint32_t md_ctime_nsec;
     int64_t md_atime;
     int64_t md_mtime;
     int64_t md_ctime;
-    uint64_t md_rdev;
-    uint64_t md_size;
-    uint64_t md_blocks;
-    uint64_t generation;
-    dict_t *xattr;
-    char *linkname;
-    time_t ia_time;
+    uint64_t md_rdev;               // 设备
+    uint64_t md_size;               // size大小
+    uint64_t md_blocks;             // block数
+    uint64_t generation;            // 版本？
+    dict_t *xattr;                  // xattr字典
+    char *linkname;                 // link的名字
+    time_t ia_time;                 // ia时间？？
     time_t xa_time;
-    gf_boolean_t need_lookup;
-    gf_boolean_t valid;
-    gf_boolean_t gen_rollover;
-    gf_boolean_t invalidation_rollover;
-    gf_lock_t lock;
+    gf_boolean_t need_lookup;       // 是否需要lookup
+    gf_boolean_t valid;             // 是否有效
+    gf_boolean_t gen_rollover;      // 轮转生产
+    gf_boolean_t invalidation_rollover;         // 无效轮转
+    gf_lock_t lock;                 // 锁
 };
 
 struct mdc_local {
@@ -131,7 +161,7 @@ struct mdc_local {
     char *linkname;
     char *key;
     dict_t *xattr;
-    uint64_t incident_time;
+    uint64_t incident_time;         // 时间时间
 };
 
 int
@@ -905,7 +935,7 @@ mdc_inode_reset_need_lookup(xlator_t *this, inode_t *inode)
 out:
     return need;
 }
-
+// 明确需要lookup， 从inode的ctx中取出mdc，将其need_lookup置为need
 void
 mdc_inode_set_need_lookup(xlator_t *this, inode_t *inode, gf_boolean_t need)
 {
@@ -965,7 +995,7 @@ mdc_inode_xatt_invalidate(xlator_t *this, inode_t *inode)
 out:
     return ret;
 }
-
+// 根据iatt中的gfid找到对应的inode，让其失效
 static int
 mdc_update_gfid_stat(xlator_t *this, struct iatt *iatt)
 {
@@ -984,7 +1014,7 @@ mdc_update_gfid_stat(xlator_t *this, struct iatt *iatt)
 out:
     return ret;
 }
-
+// 加载 cache_list到字典中
 void
 mdc_load_reqs(xlator_t *this, dict_t *dict)
 {
@@ -1005,8 +1035,8 @@ mdc_load_reqs(xlator_t *this, dict_t *dict)
 
     pattern = strtok_r(mdc_xattr_str, ",", &tmp);
     while (pattern) {
-        gf_strTrim(&pattern);
-        ret = dict_set_int8(dict, pattern, 0);
+        gf_strTrim(&pattern);       // trim 修剪，  去字符串开头和结尾的字符
+        ret = dict_set_int8(dict, pattern, 0);          // 设置pattern 对应的value为0
         if (ret) {
             conf->mdc_xattr_str = NULL;
             gf_msg("md-cache", GF_LOG_ERROR, 0, MD_CACHE_MSG_NO_XATTR_CACHE,
@@ -3306,7 +3336,7 @@ mdc_xattr_list_populate(struct mdc_conf *conf, char *tmp_str)
         /* This is not freed, else is_mdc_key_satisfied, which is
          * called by every fop has to take lock, and will lead to
          * lock contention
-         */
+         */     // 这个不释放，否则is_mdc_key_satisfied，每个fop调用的都得取锁，会导致锁争用
         conf->mdc_xattr_str = mdc_xattr_str;
     }
     UNLOCK(&conf->lock);
@@ -3334,8 +3364,8 @@ mdc_inval_xatt(dict_t *d, char *k, data_t *v, void *tmp)
 static int
 mdc_invalidate(xlator_t *this, void *data)
 {
-    struct gf_upcall *up_data = NULL;
-    struct gf_upcall_cache_invalidation *up_ci = NULL;
+    struct gf_upcall *up_data = NULL;           // 上调的数据结构
+    struct gf_upcall_cache_invalidation *up_ci = NULL;  // 上调缓存失效与否
     inode_t *inode = NULL;
     int ret = 0;
     struct set tmp = {
@@ -3345,47 +3375,48 @@ mdc_invalidate(xlator_t *this, void *data)
     struct mdc_conf *conf = this->private;
     uint64_t gen = 0;
 
-    up_data = (struct gf_upcall *)data;
+    up_data = (struct gf_upcall *)data;             // data为upcall类型的数据
 
-    if (up_data->event_type != GF_UPCALL_CACHE_INVALIDATION)
+    if (up_data->event_type != GF_UPCALL_CACHE_INVALIDATION)        // 如果不是upcall_cache_invalidation类型的event，out
         goto out;
 
-    up_ci = (struct gf_upcall_cache_invalidation *)up_data->data;
+    up_ci = (struct gf_upcall_cache_invalidation *)up_data->data;   // upcall中的data对应upcall_cache_invalidation
 
-    itable = ((xlator_t *)this->graph->top)->itable;
-    inode = inode_find(itable, up_data->gfid);
+    itable = ((xlator_t *)this->graph->top)->itable;        // 获取inode table
+    inode = inode_find(itable, up_data->gfid);              // 查找上调文件的gfid，在inode表格中
     if (!inode) {
         ret = -1;
         goto out;
     }
 
-    if (up_ci->flags & UP_PARENT_DENTRY_FLAGS) {
+    if (up_ci->flags & UP_PARENT_DENTRY_FLAGS) {            // 父目录信息失效(对该gfid的操作 rename, unlink, rmdir,mkdir, create)
         mdc_update_gfid_stat(this, &up_ci->p_stat);
-        if (up_ci->flags & UP_RENAME_FLAGS)
+        if (up_ci->flags & UP_RENAME_FLAGS)                 // 这里的rename包含移动文件？？
             mdc_update_gfid_stat(this, &up_ci->oldp_stat);
     }
 
-    if (up_ci->flags & UP_EXPLICIT_LOOKUP) {
-        mdc_inode_set_need_lookup(this, inode, _gf_true);
+    if (up_ci->flags & UP_EXPLICIT_LOOKUP) {                // 明确需要lookup
+        mdc_inode_set_need_lookup(this, inode, _gf_true);   // 从inode的ctx中取出mdc， 将其need_lookup置为true
         goto out;
     }
 
     if (up_ci->flags &
-        (UP_NLINK | UP_RENAME_FLAGS | UP_FORGET | UP_INVAL_ATTR)) {
+        (UP_NLINK | UP_RENAME_FLAGS | UP_FORGET | UP_INVAL_ATTR)) {         // 对于nlink,rename,forget,inval_attr等标识位，使其iatt和xatt失效
         mdc_inode_iatt_invalidate(this, inode);
         mdc_inode_xatt_invalidate(this, inode);
-        GF_ATOMIC_INC(conf->mdc_counter.stat_invals);
+        GF_ATOMIC_INC(conf->mdc_counter.stat_invals);       // 失效计数
         goto out;
     }
 
-    if (up_ci->flags & IATT_UPDATE_FLAGS) {
-        gen = mdc_inc_generation(this, inode);
+    if (up_ci->flags & IATT_UPDATE_FLAGS) {             // iatt更新flag
+        gen = mdc_inc_generation(this, inode);      // 增加版本计数
         ret = mdc_inode_iatt_set_validate(this, inode, NULL, &up_ci->stat,
                                           _gf_false, gen);
         /* one of the scenarios where ret < 0 is when this invalidate
          * is older than the current stat, in that case do not
          * update the xattrs as well
          */
+        /*ret < 0 的场景之一是当此无效比当前状态更旧时，在这种情况下也不要更新 xattrs*/
         if (ret < 0)
             goto out;
         GF_ATOMIC_INC(conf->mdc_counter.stat_invals);
@@ -3454,7 +3485,7 @@ mdc_send_xattrs(void *data)
 
     return ret;
 }
-
+// 注册的xattr 失效
 static int
 mdc_register_xattr_inval(xlator_t *this)
 {
@@ -3468,7 +3499,7 @@ mdc_register_xattr_inval(xlator_t *this)
 
     LOCK(&conf->lock);
     {
-        if (!conf->mdc_invalidation) {
+        if (!conf->mdc_invalidation) {          // off 收到换出失效通知不做处理
             UNLOCK(&conf->lock);
             goto out;
         }
@@ -3482,7 +3513,7 @@ mdc_register_xattr_inval(xlator_t *this)
         ret = -1;
         goto out;
     }
-
+    // cache list 加载到字典中，默认值为0
     mdc_load_reqs(this, xattr);
 
     frame = create_frame(this, this->ctx->pool);
@@ -3504,18 +3535,18 @@ mdc_register_xattr_inval(xlator_t *this)
     data->this = this;
     data->xattr = xattr;
     ret = synctask_new(this->ctx->env, mdc_send_xattrs, mdc_send_xattrs_cbk,
-                       frame, data);
+                       frame, data);                // 新建协程任务，
     if (ret < 0) {
         gf_msg(this->name, GF_LOG_WARNING, errno,
                MD_CACHE_MSG_IPC_UPCALL_FAILED,
                "Registering the list "
-               "of xattrs that needs invalidaton, with upcall, failed");
+               "of xattrs that needs invalidaton, with upcall, failed");    /*注册需要 invalidaton 的 xattrs 列表，使用 upcall，失败*/
     }
 
 out:
     if (ret < 0) {
-        mdc_key_unload_all(conf);
-        if (xattr)
+        mdc_key_unload_all(conf);               // 清空cache list
+        if (xattr)                              // 释放资源
             dict_unref(xattr);
         if (frame)
             STACK_DESTROY(frame->root);
@@ -3647,9 +3678,9 @@ mdc_init(xlator_t *this)
     GF_OPTION_INIT("md-cache-statfs", conf->cache_statfs, bool, out);
 
     GF_OPTION_INIT("xattr-cache-list", tmp_str, str, out);
-    mdc_xattr_list_populate(conf, tmp_str);
+    mdc_xattr_list_populate(conf, tmp_str);             // 把缓存的元数据放在conf->mdc_xattr_str中，，隔开
 
-    time(&conf->last_child_down);
+    time(&conf->last_child_down);                       // 获取自1970-01-01至今天的秒数
     /* initialize gf_atomic_t counters */
     GF_ATOMIC_INIT(conf->mdc_counter.stat_hit, 0);
     GF_ATOMIC_INIT(conf->mdc_counter.stat_miss, 0);
@@ -3667,7 +3698,10 @@ mdc_init(xlator_t *this)
      * feature for md-cache needs to be enabled, if not set timeout to the
      * previous max which is 60s
      */
-    if ((timeout > 60) && (!conf->mdc_invalidation)) {
+    /* 如果超时大于 60 秒（默认在添加缓存失效支持的补丁之前），
+     * 则需要启用 md-cache 的缓存失效功能，如果没有将超时设置为之前的最大值，
+     * 即 60 秒*/
+    if ((timeout > 60) && (!conf->mdc_invalidation)) {      // mdc_invalidation on 表示接受缓存失效的通知。不接受通知改为默认的60s超时
         conf->timeout = 60;
         goto out;
     }
@@ -3688,7 +3722,7 @@ mdc_update_child_down_time(xlator_t *this, time_t *now)
 
     LOCK(&conf->lock);
     {
-        conf->last_child_down = *now;
+        conf->last_child_down = *now;           // 更新child down 时间戳
     }
     UNLOCK(&conf->lock);
 }
@@ -3703,17 +3737,17 @@ mdc_notify(xlator_t *this, int event, void *data, ...)
     conf = this->private;
     switch (event) {
         case GF_EVENT_CHILD_DOWN:
-        case GF_EVENT_SOME_DESCENDENT_DOWN:
+        case GF_EVENT_SOME_DESCENDENT_DOWN:    // DESCENDENT 后裔
             time(&now);
             mdc_update_child_down_time(this, &now);
             break;
         case GF_EVENT_UPCALL:
-            if (conf->mdc_invalidation)
+            if (conf->mdc_invalidation)        // 针对向上调用， 失效缓存
                 ret = mdc_invalidate(this, data);
             break;
         case GF_EVENT_CHILD_UP:
         case GF_EVENT_SOME_DESCENDENT_UP:
-            ret = mdc_register_xattr_inval(this);
+            ret = mdc_register_xattr_inval(this);       // 注册xattr无效？
             break;
         default:
             break;
@@ -3782,7 +3816,7 @@ struct volume_options mdc_options[] = {
         .key = {"md-cache"},
         .type = GF_OPTION_TYPE_BOOL,
         .default_value = "off",
-        .description = "enable/disable md-cache",
+        .description = "enable/disable md-cache",           // enable/disable md-cache
         .op_version = {GD_OP_VERSION_6_0},
         .flags = OPT_FLAG_SETTABLE,
     },
@@ -3792,7 +3826,7 @@ struct volume_options mdc_options[] = {
         .default_value = "false",
         .op_version = {2},
         .flags = OPT_FLAG_SETTABLE | OPT_FLAG_CLIENT_OPT | OPT_FLAG_DOC,
-        .description = "Cache selinux xattr(security.selinux) on client side",
+        .description = "Cache selinux xattr(security.selinux) on client side",      // 缓存security.selinux
     },
     {
         .key = {"cache-capability-xattrs"},
@@ -3801,7 +3835,7 @@ struct volume_options mdc_options[] = {
         .op_version = {GD_OP_VERSION_3_10_0},
         .flags = OPT_FLAG_SETTABLE | OPT_FLAG_CLIENT_OPT | OPT_FLAG_DOC,
         .description = "Cache capability xattr(security.capability) on "
-                       "client side",
+                       "client side",           // 客户端缓存xattr能力 (security.capability)
     },
     {
         .key = {"cache-ima-xattrs"},
@@ -3809,7 +3843,7 @@ struct volume_options mdc_options[] = {
         .default_value = "true",
         .op_version = {GD_OP_VERSION_3_10_0},
         .flags = OPT_FLAG_SETTABLE | OPT_FLAG_CLIENT_OPT | OPT_FLAG_DOC,
-        .description = "Cache Linux integrity subsystem xattr(security.ima) "
+        .description = "Cache Linux integrity subsystem xattr(security.ima) "       // 缓存 Linux 完整性子系统 xattr
                        "on client side",
     },
     {
@@ -3838,6 +3872,7 @@ struct volume_options mdc_options[] = {
         .flags = OPT_FLAG_SETTABLE | OPT_FLAG_CLIENT_OPT | OPT_FLAG_DOC,
         .description = "Cache posix ACL xattrs (system.posix_acl_access, "
                        "system.posix_acl_default) on client side",
+                       /*在客户端缓存 posix ACL xattrs (system.posix_acl_access, system.posix_acl_default)*/
     },
     {
         .key = {"cache-glusterfs-acl"},
@@ -3848,6 +3883,7 @@ struct volume_options mdc_options[] = {
         .description = "Cache virtual glusterfs ACL xattrs "
                        "(glusterfs.posix.acl, glusterfs.posix.default_acl) "
                        "on client side",
+                       /*在客户端缓存虚拟 glusterfs ACL xattrs (glusterfs.posix.acl, glusterfs.posix.default_acl)*/
     },
     {
         .key = {"md-cache-timeout"},
@@ -3857,7 +3893,7 @@ struct volume_options mdc_options[] = {
         .default_value = SITE_H_MD_CACHE_TIMEOUT,
         .op_version = {2},
         .flags = OPT_FLAG_SETTABLE | OPT_FLAG_CLIENT_OPT | OPT_FLAG_DOC,
-        .description = "Time period after which cache has to be refreshed",
+        .description = "Time period after which cache has to be refreshed",     // 必须刷新缓存的时间段
     },
     {
         .key = {"force-readdirp"},
@@ -3866,7 +3902,7 @@ struct volume_options mdc_options[] = {
         .op_version = {2},
         .flags = OPT_FLAG_SETTABLE | OPT_FLAG_CLIENT_OPT | OPT_FLAG_DOC,
         .description = "Convert all readdir requests to readdirplus to "
-                       "collect stat info on each entry.",
+                       "collect stat info on each entry.",      // 将所有 readdir 请求转换为 readdirplus 以收集每个条目的统计信息
     },
     {
         .key = {"cache-invalidation"},
@@ -3875,10 +3911,10 @@ struct volume_options mdc_options[] = {
         .op_version = {GD_OP_VERSION_3_9_0},
         .flags = OPT_FLAG_SETTABLE | OPT_FLAG_CLIENT_OPT | OPT_FLAG_DOC,
         .description = "When \"on\", invalidates/updates the metadata cache,"
-                       " on receiving the cache-invalidation notifications",
+                       " on receiving the cache-invalidation notifications",    // when on 收到缓存失效的通知时，失效/更新元数据缓存
     },
     {
-        .key = {"global-cache-invalidation"},
+        .key = {"global-cache-invalidation"},           // 多客户端一致性 需求 ，on
         .type = GF_OPTION_TYPE_BOOL,
         .default_value = "true",
         .op_version = {GD_OP_VERSION_6_0},
@@ -3899,6 +3935,11 @@ struct volume_options mdc_options[] = {
             "keeping them "
             "coherent. This option overrides value of "
             "performance.cache-invalidation.",
+            /*当“on”时，每当检测到统计更改时，清除内核和 glusterfs 堆栈中的所有读取缓存。在处理对文件操作 (fop) 的响应或通过调用通知时，
+            可以检测到状态更改。由于清除缓存可能是一项昂贵的操作，因此建议仅当可以从多个不同的 Glusterfs 
+            挂载访问文件并且跨这些不同挂载的缓存需要保持一致时才使用此选项“on”。如果一个文件没有通过不同的挂载访问
+            （简单的例子是一个卷只有一个挂载），建议保持这个选项“关闭”，
+            因为所有文件修改都通过缓存来保持它们的一致性。此选项会覆盖 performance.cache-invalidation 的值。*/
     },
     {
         .key = {"md-cache-statfs"},
@@ -3906,16 +3947,16 @@ struct volume_options mdc_options[] = {
         .default_value = "off",
         .op_version = {GD_OP_VERSION_4_0_0},
         .flags = OPT_FLAG_SETTABLE | OPT_FLAG_CLIENT_OPT | OPT_FLAG_DOC,
-        .description = "Cache statfs information of filesystem on the client",
+        .description = "Cache statfs information of filesystem on the client",  // 缓存客户端文件系统的statfs信息
     },
     {
-        .key = {"xattr-cache-list"},
+        .key = {"xattr-cache-list"},            // 自定义要缓存的元数据，隔开，只允许*通配符
         .type = GF_OPTION_TYPE_STR,
         .default_value = "",
         .op_version = {GD_OP_VERSION_4_0_0},
         .flags = OPT_FLAG_SETTABLE | OPT_FLAG_CLIENT_OPT | OPT_FLAG_DOC,
         .description = "A comma separated list of xattrs that shall be "
-                       "cached by md-cache. The only wildcard allowed is '*'",
+                       "cached by md-cache. The only wildcard allowed is '*'",  /*应由 md-cache 缓存的逗号分隔的 xattrs 列表。唯一允许的通配符是 '*' */
     },
     {.key = {"pass-through"},
      .type = GF_OPTION_TYPE_BOOL,
@@ -3923,7 +3964,7 @@ struct volume_options mdc_options[] = {
      .op_version = {GD_OP_VERSION_4_1_0},
      .flags = OPT_FLAG_SETTABLE | OPT_FLAG_DOC | OPT_FLAG_CLIENT_OPT,
      .tags = {"md-cache"},
-     .description = "Enable/Disable md cache translator"},
+     .description = "Enable/Disable md cache translator"},      // 启用/禁用 md 缓存xlator
     {.key = {NULL}},
 };
 

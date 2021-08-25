@@ -78,7 +78,7 @@ struct gf_upcall {
 
 struct gf_upcall_cache_invalidation {
     uint32_t flags;
-    uint32_t expire_time_attr;
+    uint32_t expire_time_attr;          // 过期时间 attr
     struct iatt stat;
     struct iatt p_stat;    /* parent dir stat */
     struct iatt oldp_stat; /* oldparent dir stat */

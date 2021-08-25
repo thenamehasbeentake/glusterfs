@@ -2177,12 +2177,12 @@ gf_strTrim(char **s)
     char *end = NULL;
 
     end = *s + strlen(*s) - 1;
-    while (end > *s && isspace((unsigned char)*end))
+    while (end > *s && isspace((unsigned char)*end))        // 去除结尾的空白字符
         end--;
 
-    *(end + 1) = '\0';
+    *(end + 1) = '\0';      // 字符串结尾补'\0'
 
-    while (isspace(**s))
+    while (isspace(**s))    // 字符串前面去空白字符
         (*s)++;
 
     return;
