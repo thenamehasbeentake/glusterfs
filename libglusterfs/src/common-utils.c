@@ -5038,7 +5038,7 @@ gf_is_valid_xattr_namespace(char *key)
 
     return _gf_false;
 }
-
+// gfid转换为inode number
 ino_t
 gfid_to_ino(uuid_t gfid)
 {

@@ -145,8 +145,8 @@ struct md_cache {
     uint64_t generation;            // 版本？
     dict_t *xattr;                  // xattr字典
     char *linkname;                 // link的名字
-    time_t ia_time;                 // ia时间？？
-    time_t xa_time;
+    time_t ia_time;                 // iatt时间？？
+    time_t xa_time;                 // xatt
     gf_boolean_t need_lookup;       // 是否需要lookup
     gf_boolean_t valid;             // 是否有效
     gf_boolean_t gen_rollover;      // 轮转生产
@@ -161,7 +161,7 @@ struct mdc_local {
     char *linkname;
     char *key;
     dict_t *xattr;
-    uint64_t incident_time;         // 时间时间
+    uint64_t incident_time;         // 事件时间
 };
 
 int
@@ -306,7 +306,7 @@ mdc_local_get(call_frame_t *frame, inode_t *inode)
     local = GF_CALLOC(sizeof(*local), 1, gf_mdc_mt_mdc_local_t);
     if (!local)
         goto out;
-
+    // 获取generation(生成事件)
     local->incident_time = mdc_get_generation(frame->this, inode);
     frame->local = local;
 out:
@@ -401,7 +401,7 @@ unlock:
  * - It is not cached before any brick was down. Brick down case is handled by
  *   invalidating all the cache when any brick went down.
  * - The cache time is not expired
- */
+ */ // cache是否超时了
 static gf_boolean_t
 __is_cache_valid(xlator_t *this, time_t mdc_time)
 {
@@ -450,8 +450,8 @@ is_md_cache_iatt_valid(xlator_t *this, struct md_cache *mdc)
         } else {
             ret = __is_cache_valid(this, mdc->ia_time);
             if (ret == _gf_false) {
-                mdc->ia_time = 0;
-                mdc->generation = 0;
+                mdc->ia_time = 0;       // 缓存失效，重置缓存时间
+                mdc->generation = 0;    // 生成时间设置为0
             }
         }
     }
@@ -523,13 +523,13 @@ mdc_inode_iatt_set_validate(xlator_t *this, inode_t *inode, struct iatt *prebuf,
     uint64_t gen = 0;
     gf_boolean_t update_xa_time = _gf_false;
     struct mdc_conf *conf = this->private;
-
+    // loc的parent的inode如果没有mdc，创建一个。放入inode的ctx中
     mdc = mdc_inode_prep(this, inode);
     if (!mdc) {
         ret = -1;
         goto out;
     }
-
+    // 事件时间
     rollover = incident_time >> 32;
     incident_time = (incident_time & 0xffffffff);
 
@@ -586,7 +586,7 @@ mdc_inode_iatt_set_validate(xlator_t *this, inode_t *inode, struct iatt *prebuf,
             (iatt->ia_mtime_nsec != mdc->md_mtime_nsec) ||
             (iatt->ia_ctime != mdc->md_ctime) ||
             (iatt->ia_ctime_nsec != mdc->md_ctime_nsec)) {
-            if (conf->global_invalidation &&
+            if (conf->global_invalidation &&                // 全局失效，并且prebuf(create fop cbk)
                 (!prebuf || (prebuf->ia_mtime != mdc->md_mtime) ||
                  (prebuf->ia_mtime_nsec != mdc->md_mtime_nsec) ||
                  (prebuf->ia_ctime != mdc->md_ctime) ||
@@ -604,15 +604,15 @@ mdc_inode_iatt_set_validate(xlator_t *this, inode_t *inode, struct iatt *prebuf,
                 update_xa_time = _gf_true;
             }
         }
-
+        // 时间戳范围正常
         if ((mdc->gen_rollover == rollover) &&
             (incident_time >= mdc->generation)) {
             mdc_from_iatt(mdc, iatt);
             mdc->valid = _gf_true;
-            if (update_time) {
+            if (update_time) {      // 更新mdc获取到iatt的时间
                 time(&mdc->ia_time);
 
-                if (mdc->xa_time && update_xa_time)
+                if (mdc->xa_time && update_xa_time)     // 更新获取xatt time
                     time(&mdc->xa_time);
             }
 
@@ -660,7 +660,7 @@ mdc_inode_iatt_get(xlator_t *this, inode_t *inode, struct iatt *iatt)
                      uuid_utoa(inode->gfid));
         goto out;
     }
-
+    // 判断cache是否失效
     if (!is_md_cache_iatt_valid(this, mdc)) {
         gf_msg_trace("md-cache", 0, "iatt cache not valid for (%s)",
                      uuid_utoa(inode->gfid));
@@ -668,14 +668,14 @@ mdc_inode_iatt_get(xlator_t *this, inode_t *inode, struct iatt *iatt)
     }
 
     LOCK(&mdc->lock);
-    {
+    {   // 取出iatt
         mdc_to_iatt(mdc, iatt);
     }
     UNLOCK(&mdc->lock);
-
+    // 拷贝gfid
     gf_uuid_copy(iatt->ia_gfid, inode->gfid);
     iatt->ia_ino = gfid_to_ino(inode->gfid);
-    iatt->ia_dev = 42;
+    iatt->ia_dev = 42;      // 设备号42??
     iatt->ia_type = inode->ia_type;
 
     ret = 0;
@@ -687,7 +687,7 @@ struct updatedict {
     dict_t *dict;
     int ret;
 };
-
+// mdc缓存的xattr中是否有与key匹配的
 static int
 is_mdc_key_satisfied(xlator_t *this, const char *key)
 {
@@ -729,7 +729,7 @@ is_mdc_key_satisfied(xlator_t *this, const char *key)
 out:
     return ret;
 }
-
+// 更新能够key对应的value值
 static int
 updatefn(dict_t *dict, char *key, data_t *value, void *data)
 {
@@ -751,7 +751,7 @@ updatefn(dict_t *dict, char *key, data_t *value, void *data)
     }
     return 0;
 }
-
+// 从src中找到与mdc 自定义xatt相匹配的key，并更新到tgt中
 static int
 mdc_dict_update(dict_t **tgt, dict_t *src)
 {
@@ -774,7 +774,7 @@ mdc_dict_update(dict_t **tgt, dict_t *src)
 
     return u.ret;
 }
-
+// 从dict取出mdc自定义的xatt，并更新回去。相当于减掉多余的key存到mdc ctx中
 int
 mdc_inode_xatt_set(xlator_t *this, inode_t *inode, dict_t *dict)
 {
@@ -953,7 +953,7 @@ mdc_inode_set_need_lookup(xlator_t *this, inode_t *inode, gf_boolean_t need)
 out:
     return;
 }
-
+// iatt失效的处理
 void
 mdc_inode_iatt_invalidate(xlator_t *this, inode_t *inode)
 {
@@ -1065,7 +1065,7 @@ checkfn(dict_t *this, char *key, data_t *value, void *data)
 
     return 0;
 }
-
+// 荣req字典里面， 查找mdc中自定义xattr，找到返回0
 int
 mdc_xattr_satisfied(xlator_t *this, dict_t *req, dict_t *rsp)
 {
@@ -1221,7 +1221,7 @@ mdc_lookup_cbk(call_frame_t *frame, void *cookie, xlator_t *this,
 
     if (op_ret != 0) {
         if (op_errno == ENOENT)
-            GF_ATOMIC_INC(conf->mdc_counter.negative_lookup);
+            GF_ATOMIC_INC(conf->mdc_counter.negative_lookup);   // 无效的lookup
 
         if (op_errno == ESTALE) {
             /* if op_errno is ENOENT, fuse-bridge will unlink the
@@ -1238,12 +1238,12 @@ mdc_lookup_cbk(call_frame_t *frame, void *cookie, xlator_t *this,
 
     if (!local)
         goto out;
-
+    // 更新loc.parent的mdc时间
     if (local->loc.parent) {
         mdc_inode_iatt_set(this, local->loc.parent, postparent,
                            local->incident_time);
     }
-
+    // 更新loc.loc的mdc时间
     if (local->loc.inode) {
         mdc_inode_iatt_set(this, local->loc.inode, stbuf, local->incident_time);
         mdc_inode_xatt_set(this, local->loc.inode, dict);
@@ -1268,7 +1268,7 @@ mdc_lookup(call_frame_t *frame, xlator_t *this, loc_t *loc, dict_t *xdata)
     dict_t *xattr_alloc = NULL;
     mdc_local_t *local = NULL;
     struct mdc_conf *conf = this->private;
-
+    // 获取frame中的local
     local = mdc_local_get(frame, loc->inode);
     if (!local) {
         GF_ATOMIC_INC(conf->mdc_counter.stat_miss);
@@ -1276,37 +1276,38 @@ mdc_lookup(call_frame_t *frame, xlator_t *this, loc_t *loc, dict_t *xdata)
     }
 
     loc_copy(&local->loc, loc);
-
+    // inode不在inode table中
     if (!inode_is_linked(loc->inode)) {
         GF_ATOMIC_INC(conf->mdc_counter.stat_miss);
         goto uncached;
     }
-
+    // 更新mdc_cache中lookup值， swap and test
     if (mdc_inode_reset_need_lookup(this, loc->inode)) {
         GF_ATOMIC_INC(conf->mdc_counter.need_lookup);
         goto uncached;
     }
-
+    // 获取iatt的cache
     ret = mdc_inode_iatt_get(this, loc->inode, &stbuf);
     if (ret != 0) {
         GF_ATOMIC_INC(conf->mdc_counter.stat_miss);
         goto uncached;
     }
-
-    if (xdata) {
+    // Xdata不为空的意义
+    if (xdata) {    // 从inode ctx中取出之前缓存的xattr字典
         ret = mdc_inode_xatt_get(this, loc->inode, &xattr_rsp);
         if (ret != 0) {
             GF_ATOMIC_INC(conf->mdc_counter.xattr_miss);
             goto uncached;
         }
-
+        // 遍历xdata字典，查找自定义的xattr， 匹配成功返回成功
         if (!mdc_xattr_satisfied(this, xdata, xattr_rsp)) {
             GF_ATOMIC_INC(conf->mdc_counter.xattr_miss);
             goto uncached;
         }
     }
-
+    // 命中
     GF_ATOMIC_INC(conf->mdc_counter.stat_hit);
+    // 命中unwind回去
     MDC_STACK_UNWIND(lookup, frame, 0, 0, loc->inode, &stbuf, xattr_rsp,
                      &postparent);
 
@@ -1320,7 +1321,7 @@ uncached:
         xdata = xattr_alloc = dict_new();
     if (xdata)
         mdc_load_reqs(this, xdata);
-
+    // 好家伙，xdata为空在这里给它new一个， 自定义及默认的xattr的加载到字典中
     STACK_WIND(frame, mdc_lookup_cbk, FIRST_CHILD(this),
                FIRST_CHILD(this)->fops->lookup, loc, xdata);
 
@@ -1946,12 +1947,12 @@ mdc_create_cbk(call_frame_t *frame, void *cookie, xlator_t *this,
 
     if (op_ret != 0) {
         if ((op_errno == ESTALE) || (op_errno == ENOENT)) {
-            mdc_inode_iatt_invalidate(this, local->loc.parent);
+            mdc_inode_iatt_invalidate(this, local->loc.parent);     // 文件创建失败， 使其父目录inode信息失效
         }
 
         goto out;
     }
-
+    // 文件创建成功，更新loc.inode和loc.parent mdc的ia_time 和 xa_time
     if (local->loc.parent) {
         mdc_inode_iatt_set(this, local->loc.parent, postparent,
                            local->incident_time);
