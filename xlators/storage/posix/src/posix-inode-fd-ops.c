@@ -158,7 +158,7 @@ posix_cs_build_xattr_rsp(xlator_t *this, dict_t **rsp, dict_t *req, int fd,
     }
     return;
 }
-
+// 传入loc， dict字典
 int32_t
 posix_stat(call_frame_t *frame, xlator_t *this, loc_t *loc, dict_t *xdata)
 {
@@ -180,8 +180,8 @@ posix_stat(call_frame_t *frame, xlator_t *this, loc_t *loc, dict_t *xdata)
     priv = this->private;
     VALIDATE_OR_GOTO(priv, out);
 
-    SET_FS_ID(frame->root->uid, frame->root->gid);
-
+    SET_FS_ID(frame->root->uid, frame->root->gid);      // mock掉了
+    // 获取real path
     MAKE_INODE_HANDLE(real_path, this, loc, &buf);
 
     if (op_ret == -1) {

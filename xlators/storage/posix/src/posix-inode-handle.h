@@ -28,6 +28,10 @@
 #define LOC_HAS_ABSPATH(loc) (loc && (loc->path) && (loc->path[0] == '/'))
 #define LOC_IS_DIR(loc)                                                        \
     (loc && (loc->inode) && (loc->inode->ia_type == IA_IFDIR))
+// var_len = this->private->base_path_length +strlen(path)
+// var的长度等于工作目录长度 + 相对目录长度
+// 如果长度超过了限制值，以path去掉前缀的'/'(相对路径名)赋值给var
+// 否则var为绝对路径
 #define MAKE_REAL_PATH(var, this, path)                                        \
     do {                                                                       \
         size_t path_len = strlen(path);                                        \
@@ -41,7 +45,7 @@
             strcpy(&var[POSIX_BASE_PATH_LEN(this)], path);                     \
         }                                                                      \
     } while (0)
-
+// posix_handle_path 第一次获取路径长度，第二次赋值
 #define MAKE_HANDLE_PATH(var, this, gfid, base)                                \
     do {                                                                       \
         int __len;                                                             \
@@ -56,6 +60,10 @@
 
 /* TODO: it is not a good idea to change a variable which
    is not passed to the macro.. Fix it later */
+/* 如果loc是目录并且是绝对路径，  rpath被赋值为posix基本path + loc的路径， posix_pstat(根据path stat)， break
+   否则， posix_istat(根据inode stat) 参数不带 ipath
+   errno != ELOOP(链接数过多)， 通过posix_handle_path 获取路径名
+    */
 #define MAKE_INODE_HANDLE(rpath, this, loc, iatt_p)                            \
     do {                                                                       \
         if (!this->private) {                                                  \
