@@ -3748,26 +3748,54 @@ reconfigure(xlator_t *this, dict_t *options)
         goto out;
 
     conf = this->private;
-    
-// add profile in fuse process
-    GF_OPTION_RECONF("log-buf-size", log_buf_size, options, uint32, out);
 
-    if (log_buf_size < 60000) {
+#ifdef DEBUG
+#define WXBFROFILE "/var/log/glusterfs/io-stats-profile"
+// add profile in fuse process
+    // gluster v set volname diagnostics.fop-sample-buf-size 59999
+    // == gluster v profile volname info > 
+    GF_OPTION_RECONF("ios-sample-buf-size", conf->ios_sample_buf_size, options,
+                     int32, out);
+
+    gf_log("wxb", GF_LOG_ERROR, "in io-stats.c:reconfigure， conf->"
+        "ios_sample_buf_size = %d", conf->ios_sample_buf_size);
+
+    if (conf->ios_sample_buf_size < 60000) {
+        conf->measure_latency = true;
+        conf->count_fop_hits = true;
+
+        gf_log("wxb", GF_LOG_ERROR, "in io-stats.c:reconfigure, try to profile in client");
         struct ios_global_stats cumulative = {};
         struct timeval now;
         FILE *logfp = NULL;
+        char filename[PATH_MAX];
 
-        logfp = fopen("/var/log/glusterfs/io-stats-profile.tmp", "a+");
+        // file named with child xlator
+        snprintf(filename, PATH_MAX, "%s%s", WXBFROFILE, this->next->name);
+        logfp = fopen(filename, "w+");
+        if (logfp == NULL) {
+            gf_log("wxb", GF_LOG_ERROR, "in io-stats.c:reconfigure, fopen fail");
+        }
         cumulative = conf->cumulative;
         gettimeofday(&now, NULL);
 
         io_stats_dump_global_to_logfp(this, &cumulative, &now, -1, logfp);
+
+        fclose(logfp);
+        return 0;
+    } else if (conf->ios_sample_buf_size == 60000) {
+        gf_log("wxb", GF_LOG_ERROR, "in io-stats.c:reconfigure, try to clear profile");
+
+        io_stats_clear(conf);
+        conf->measure_latency = false;
+        conf->count_fop_hits = false;
         return 0;
     }
 
 
-
 // add profile in fuse process
+#endif  /* DEBUG */
+
 
     GF_OPTION_RECONF("dump-fd-stats", conf->dump_fd_stats, options, bool, out);
 
