@@ -103,7 +103,7 @@ posix_fetch_mdata_xattr(xlator_t *this, const char *real_path_arg, int _fd,
             goto out;
         }
     }
-
+    // 根据fd，real_path_arg或者real path获取GF_XATTR_MDATA_KEY的value值长度
     if (fd_based_fop) {
         size = sys_fgetxattr(_fd, key, NULL, 0);
     } else if (real_path_arg) {
@@ -147,7 +147,7 @@ posix_fetch_mdata_xattr(xlator_t *this, const char *real_path_arg, int _fd,
         *op_errno = ENOMEM;
         goto out;
     }
-
+    // calloc之后获取GF_XATTR_MDATA_KEY的value值
     if (fd_based_fop) {
         size = sys_fgetxattr(_fd, key, value, size);
     } else if (real_path_arg) {
@@ -165,7 +165,7 @@ posix_fetch_mdata_xattr(xlator_t *this, const char *real_path_arg, int _fd,
                inode ? uuid_utoa(inode->gfid) : "null", key);
         goto out;
     }
-
+    // 更新metadata
     posix_mdata_from_disk(metadata, (posix_mdata_disk_t *)value);
 
     op_ret = 0;
@@ -250,6 +250,7 @@ __posix_get_mdata_xattr(xlator_t *this, const char *real_path, int _fd,
 
     /* Handle readdirp: inode might be null, time attributes should be served
      * from xattr not from backend's file attributes */
+    // 从ctx中取出
     if (inode) {
         ret = __inode_ctx_get1(inode, this, &ctx);
         if (ret == 0) {

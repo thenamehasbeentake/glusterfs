@@ -611,7 +611,9 @@ posix_fill_gfid_path(xlator_t *this, const char *path, struct iatt *iatt)
 
     if (!iatt)
         return 0;
-
+// deeproute@storage_clutser1:/mnt/sdl/three-brick-vol-brick$ sudo getfattr -n trusted.gfid  no_dismount.txt 
+// # file: no_dismount.txt
+// trusted.gfid=0sKLuV4M3iTtaAX+DgUSexqw==
     size = sys_lgetxattr(path, GFID_XATTR_KEY, iatt->ia_gfid, 16);
     /* Return value of getxattr */
     if ((size == 16) || (size == -1))
@@ -798,7 +800,7 @@ posix_pstat(xlator_t *this, inode_t *inode, uuid_t gfid, const char *path,
     struct posix_private *priv = NULL;
 
     priv = this->private;
-
+    // 设置gfid
     if (gfid && !gf_uuid_is_null(gfid))
         gf_uuid_copy(stbuf.ia_gfid, gfid);
     else
@@ -806,6 +808,17 @@ posix_pstat(xlator_t *this, inode_t *inode, uuid_t gfid, const char *path,
     stbuf.ia_flags |= IATT_GFID;
 
     ret = sys_lstat(path, &lstatbuf);
+    
+// deeproute@storage_clutser1:/mnt/sdl/three-brick-vol-brick$ sudo stat no_dismount.txt 
+//   File: no_dismount.txt
+//   Size: 68        	Blocks: 8          IO Block: 4096   regular file
+// Device: 8b0h/2224d	Inode: 8589938653  Links: 2
+// Access: (0777/-rwxrwxrwx)  Uid: (    0/    root)   Gid: (    0/    root)
+// Access: 2021-08-27 07:50:32.824358854 +0000
+// Modify: 2021-08-27 06:51:28.904365488 +0000
+// Change: 2021-08-27 06:51:28.904365488 +0000
+//  Birth: -
+
     if (ret == -1) {
         if (errno != ENOENT) {
             op_errno = errno;
@@ -815,13 +828,13 @@ posix_pstat(xlator_t *this, inode_t *inode, uuid_t gfid, const char *path,
         }
         goto out;
     }
-
+    // lstat 返回了handledir(父目录?)的inode和设备号
     if ((lstatbuf.st_ino == priv->handledir.st_ino) &&
         (lstatbuf.st_dev == priv->handledir.st_dev)) {
         errno = ENOENT;
         return -1;
     }
-
+    // 不是目录，链接数-1。 与文件系统中..有关？或者说是与gfid的链接有关
     if (!S_ISDIR(lstatbuf.st_mode))
         lstatbuf.st_nlink--;
 

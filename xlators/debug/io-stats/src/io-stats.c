@@ -3748,6 +3748,26 @@ reconfigure(xlator_t *this, dict_t *options)
         goto out;
 
     conf = this->private;
+    
+// add profile in fuse process
+    GF_OPTION_RECONF("log-buf-size", log_buf_size, options, uint32, out);
+
+    if (log_buf_size < 60000) {
+        struct ios_global_stats cumulative = {};
+        struct timeval now;
+        FILE *logfp = NULL;
+
+        logfp = fopen("/var/log/glusterfs/io-stats-profile.tmp", "a+");
+        cumulative = conf->cumulative;
+        gettimeofday(&now, NULL);
+
+        io_stats_dump_global_to_logfp(this, &cumulative, &now, -1, logfp);
+        return 0;
+    }
+
+
+
+// add profile in fuse process
 
     GF_OPTION_RECONF("dump-fd-stats", conf->dump_fd_stats, options, bool, out);
 
