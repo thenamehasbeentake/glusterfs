@@ -3632,6 +3632,42 @@ io_priv(xlator_t *this)
     if (!conf)
         return -1;
 
+#ifdef DEBUG
+#define WXBFROFILE "/var/log/glusterfs/io-stats-profile"
+// add profile in fuse process
+    // gluster v set volname diagnostics.fop-sample-buf-size 59999
+    // == gluster v profile volname info > 
+
+    gf_log("wxb", GF_LOG_ERROR, "in io-stats.c:io_priv +");
+
+    conf->measure_latency = true;
+    conf->count_fop_hits = true;
+
+    struct ios_global_stats cumulative = {};
+    struct timeval now;
+    FILE *logfp = NULL;
+    char filename[PATH_MAX];
+
+    // file named with child xlator
+    snprintf(filename, PATH_MAX, "%s%s", WXBFROFILE, this->next->name);
+    logfp = fopen(filename, "w+");
+    if (logfp == NULL) {
+        gf_log("wxb", GF_LOG_ERROR, "in io-stats.c:io_priv, fopen %s fail", filename);
+    }
+    cumulative = conf->cumulative;
+    gettimeofday(&now, NULL);
+
+    io_stats_dump_global_to_logfp(this, &cumulative, &now, -1, logfp);
+
+    fclose(logfp);
+
+    io_stats_clear(conf);
+
+    gf_log("wxb", GF_LOG_ERROR, "in io-stats.c:io_priv -");
+// add profile in fuse process
+#endif  /* DEBUG */
+
+
     if (!conf->count_fop_hits || !conf->measure_latency)
         return -1;
 
@@ -3748,54 +3784,6 @@ reconfigure(xlator_t *this, dict_t *options)
         goto out;
 
     conf = this->private;
-
-#ifdef DEBUG
-#define WXBFROFILE "/var/log/glusterfs/io-stats-profile"
-// add profile in fuse process
-    // gluster v set volname diagnostics.fop-sample-buf-size 59999
-    // == gluster v profile volname info > 
-    GF_OPTION_RECONF("ios-sample-buf-size", conf->ios_sample_buf_size, options,
-                     int32, out);
-
-    gf_log("wxb", GF_LOG_ERROR, "in io-stats.c:reconfigure， conf->"
-        "ios_sample_buf_size = %d", conf->ios_sample_buf_size);
-
-    if (conf->ios_sample_buf_size < 60000) {
-        conf->measure_latency = true;
-        conf->count_fop_hits = true;
-
-        gf_log("wxb", GF_LOG_ERROR, "in io-stats.c:reconfigure, try to profile in client");
-        struct ios_global_stats cumulative = {};
-        struct timeval now;
-        FILE *logfp = NULL;
-        char filename[PATH_MAX];
-
-        // file named with child xlator
-        snprintf(filename, PATH_MAX, "%s%s", WXBFROFILE, this->next->name);
-        logfp = fopen(filename, "w+");
-        if (logfp == NULL) {
-            gf_log("wxb", GF_LOG_ERROR, "in io-stats.c:reconfigure, fopen fail");
-        }
-        cumulative = conf->cumulative;
-        gettimeofday(&now, NULL);
-
-        io_stats_dump_global_to_logfp(this, &cumulative, &now, -1, logfp);
-
-        fclose(logfp);
-        return 0;
-    } else if (conf->ios_sample_buf_size == 60000) {
-        gf_log("wxb", GF_LOG_ERROR, "in io-stats.c:reconfigure, try to clear profile");
-
-        io_stats_clear(conf);
-        conf->measure_latency = false;
-        conf->count_fop_hits = false;
-        return 0;
-    }
-
-
-// add profile in fuse process
-#endif  /* DEBUG */
-
 
     GF_OPTION_RECONF("dump-fd-stats", conf->dump_fd_stats, options, bool, out);
 
