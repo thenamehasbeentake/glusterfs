@@ -5012,8 +5012,8 @@ fuse_init(xlator_t *this, fuse_in_header_t *finh, void *msg,
 
     fino.major = FUSE_KERNEL_VERSION;
     fino.minor = FUSE_KERNEL_MINOR_VERSION;
-    fino.max_readahead = 1 << 17;
-    fino.max_write = 1 << 17;
+    fino.max_readahead = 1 << 20;
+    fino.max_write = 1 << 20;
     fino.flags = FUSE_ASYNC_READ | FUSE_POSIX_LOCKS;
 #if FUSE_KERNEL_MINOR_VERSION >= 17
     if (fini->minor >= 17)
@@ -6771,9 +6771,8 @@ init(xlator_t *this_xl)
         goto cleanup_exit;
     }
 
-    gf_asprintf(&mnt_args, "%s%s%s%sallow_other,max_read=131072",
+    gf_asprintf(&mnt_args, "%s%s%sallow_other,max_read=1048576",
                 priv->acl ? "" : "default_permissions,",
-                priv->read_only ? "ro," : "",
                 priv->fuse_mountopts ? priv->fuse_mountopts : "",
                 priv->fuse_mountopts ? "," : "");
     if (!mnt_args)

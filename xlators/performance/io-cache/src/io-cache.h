@@ -22,7 +22,7 @@
 #include <fnmatch.h>
 #include "io-cache-messages.h"
 
-#define IOC_PAGE_SIZE (1024 * 128) /* 128KB */
+#define IOC_PAGE_SIZE (1024 * 1024) /* 128KB */ /*1024k*/
 #define IOC_CACHE_SIZE (32 * 1024 * 1024)
 #define IOC_PAGE_TABLE_BUCKET_COUNT 1
 

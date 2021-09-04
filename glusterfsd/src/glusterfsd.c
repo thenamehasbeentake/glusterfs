@@ -1757,7 +1757,7 @@ glusterfs_ctx_defaults_init(glusterfs_ctx_t *ctx)
         goto out;
     }
 
-    ctx->page_size = 128 * GF_UNIT_KB;
+    ctx->page_size = 1024 * GF_UNIT_KB;
 
     ctx->iobuf_pool = iobuf_pool_new();
     if (!ctx->iobuf_pool) {

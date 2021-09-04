@@ -23,7 +23,7 @@
 #include "write-behind-messages.h"
 
 #define MAX_VECTOR_COUNT 8
-#define WB_AGGREGATE_SIZE 131072 /* 128 KB */
+#define WB_AGGREGATE_SIZE 1048576 /* 128 KB */ /*1024k*/
 #define WB_WINDOW_SIZE 1048576   /* 1MB */
 
 typedef struct list_head list_head_t;
