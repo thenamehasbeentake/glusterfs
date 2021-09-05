@@ -1,0 +1,65 @@
+#!/usr/bin/make -f
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+%:
+	dh $@ --parallel --with python3,autotools-dev,systemd
+
+override_dh_auto_configure:
+	mv configure configure.dist && ./autogen.sh
+	dh_auto_configure -- --disable-gnfs --without-libtirpc --libexecdir=/usr/libexec
+
+override_dh_install:
+	strip --remove-section=.comment --remove-section=.note --strip-unneeded \
+		debian/tmp/usr/lib/*/glusterfs/*/xlator/debug/trace.so
+	strip --remove-section=.comment --remove-section=.note --strip-unneeded \
+		debian/tmp/usr/lib/*/glusterfs/*/xlator/debug/error-gen.so
+	strip --remove-section=.comment --remove-section=.note --strip-unneeded \
+		debian/tmp/usr/lib/*/glusterfs/*/xlator/debug/io-stats.so
+	find debian/tmp/usr/lib -type f -name \*.la -exec sed 's|^dependency_libs|#dependency_libs|g' -i {} \;
+	install -D -p -m 0644 extras/glusterfs-logrotate \
+		debian/tmp/etc/logrotate.d/glusterfs
+	install -D -p -m 0644 extras/glusterfs-georep-logrotate \
+		debian/tmp/etc/logrotate.d/glusterfs-georep
+	install -D -p -m 0755 extras/mount-shared-storage.sh \
+		debian/tmp/usr/libexec/glusterfs/mount-shared-storage.sh
+	install -D -p -m 0644 extras/glusterd-sysconfig \
+		debian/tmp/etc/default/glusterd
+	install -c -d -m 755 debian/tmp/lib/systemd/system
+	install -D -p -m 0644 extras/systemd/glusterd.service \
+		debian/tmp/lib/systemd/system/glusterd.service
+	sed -i 's|sysconfig|default|' debian/tmp/lib/systemd/system/glusterd.service
+	install -D -p -m 0644 extras/systemd/gluster-ta-volume.service \
+		debian/tmp/lib/systemd/system/gluster-ta-volume.service
+	install -D -p -m 0644 extras/systemd/glustereventsd.service \
+		debian/tmp/lib/systemd/system/glustereventsd.service
+	install -D -p -m 0644 extras/systemd/glusterfssharedstorage.service \
+		debian/tmp/lib/systemd/system/glusterfssharedstorage.service
+	mv debian/tmp/usr/sbin/gcron.py debian/tmp/usr/sbin/gcron
+	mv debian/tmp/usr/sbin/snap_scheduler.py debian/tmp/usr/sbin/snap_scheduler
+	mkdir -p $(CURDIR)/debian/tmp/usr/libexec/glusterfs/scripts
+	mkdir -p $(CURDIR)/debian/glusterfs-common/etc/glusterfs/
+	cp debian/tmp/usr/sbin/glfsheal debian/tmp/usr/libexec/glusterfs/glfsheal
+	cp debian/tmp/usr/share/glusterfs/scripts/gsync-sync-gfid debian/tmp/usr/libexec/glusterfs/scripts/gsync-sync-gfid
+	cp debian/tmp/etc/glusterfs/gsyncd.conf debian/glusterfs-common/etc/glusterfs/gsyncd.conf
+	install -c -d -m 0755 debian/tmp/run/gluster/metrics
+	dh_install --list-missing
+	# dh_missing --list-missing
+	mkdir -p $(CURDIR)/debian/glusterfs-common/usr/lib/glusterfs
+	sed -i 's|usr/local/sbin|usr/sbin|g' debian/glusterfs-common/etc/glusterfs/gsyncd.conf
+	rm -rf $(CURDIR)/debian/glusterfs-common/usr/libexec/glusterfs/glfsheal
+	rm -rf $(CURDIR)/debian/glusterfs-common/usr/libexec/glusterfs/scripts/gsync-sync-gfid
+
+override_dh_python3:
+	dh_python3 usr/libexec/glusterfs/python/syncdaemon/
+	dh_python3 usr/libexec/glusterfs/glusterfind/
+	dh_python3 usr/libexec/glusterfs/gfevents/
+
+override_dh_installinit:
+	dh_installinit -p glusterfs-server --name=glusterd
+	dh_installinit -p glusterfs-server --name=glusterta-volume
+	dh_installinit -p glusterfs-server --name=glustereventsd
+	dh_installinit -p glusterfs-server --name=glusterfssharedstorage
+
+override_dh_strip:
+	dh_strip --dbg-package=glusterfs-dbg

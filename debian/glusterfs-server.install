@@ -1,0 +1,15 @@
+etc/default/glusterd
+etc/glusterfs/glusterd.vol
+lib/systemd/system/*
+usr/bin/glusterfind
+usr/sbin/gluster
+usr/sbin/glusterd
+usr/libexec/glusterfs/glfsheal
+usr/libexec/glusterfs/scripts/gsync-sync-gfid
+usr/sbin/snap_scheduler
+usr/sbin/gcron
+usr/sbin/gfind_missing_files
+usr/share/glusterfs/scripts/*
+var/lib/glusterd/*
+run/gluster/*
+usr/share/glusterfs/scripts/*

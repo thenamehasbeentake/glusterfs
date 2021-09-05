@@ -312,7 +312,7 @@ static int check_is_mount_child(void *p)
 
 static pid_t clone_newns(void *a)
 {
-	char buf[131072];
+	char buf[1048576];
 	char *stack = buf + (sizeof(buf) / 2 - ((size_t) buf & 15));
 
 #ifdef __ia64__
