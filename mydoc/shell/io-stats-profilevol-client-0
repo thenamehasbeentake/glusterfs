@@ -1,0 +1,145 @@
+
+=== Cumulative stats ===
+      Duration : 57 secs
+     BytesRead : 0
+  BytesWritten : 0
+
+Fop           Call Count    Avg-Latency    Min-Latency    Max-Latency
+---           ----------    -----------    -----------    -----------
+OPEN                 300       74.70 us       56.84 us      426.19 us
+STATFS                 1      190.36 us      190.36 us      190.36 us
+FLUSH                302       54.40 us       40.43 us      334.97 us
+LOOKUP               209       91.77 us       72.71 us      276.30 us
+SETATTR              300       72.84 us       59.73 us      349.17 us
+RELEASE              200           0 us           0 us           0 us
+------ ----- ----- ----- ----- ----- ----- -----  ----- ----- ----- -----
+
+Current open fd's: 0 Max open fd's: 1 time 2021-09-03 04:04:44.791810
+
+==========Open File Stats========
+
+COUNT:  	  FILE NAME
+2            /file100
+2            /file99
+2            /file98
+2            /file97
+2            /file96
+2            /file95
+2            /file94
+2            /file93
+2            /file92
+2            /file91
+2            /file90
+2            /file89
+2            /file88
+2            /file87
+2            /file86
+2            /file85
+2            /file84
+2            /file83
+2            /file82
+2            /file81
+2            /file80
+2            /file79
+2            /file78
+2            /file77
+2            /file76
+2            /file75
+2            /file74
+2            /file73
+2            /file72
+2            /file71
+2            /file70
+2            /file69
+2            /file68
+2            /file67
+2            /file66
+2            /file65
+2            /file64
+2            /file63
+2            /file62
+2            /file61
+2            /file60
+2            /file59
+2            /file58
+2            /file57
+2            /file56
+2            /file55
+2            /file54
+2            /file53
+2            /file52
+2            /file51
+2            /file50
+2            /file49
+2            /file48
+2            /file47
+2            /file46
+2            /file45
+2            /file44
+2            /file43
+2            /file42
+2            /file41
+2            /file40
+2            /file39
+2            /file38
+2            /file37
+2            /file36
+2            /file35
+2            /file34
+2            /file33
+2            /file32
+2            /file31
+2            /file30
+2            /file29
+2            /file28
+2            /file27
+2            /file26
+2            /file25
+2            /file24
+2            /file23
+2            /file22
+2            /file21
+2            /file20
+2            /file19
+2            /file18
+2            /file17
+2            /file16
+2            /file15
+2            /file14
+2            /file13
+2            /file12
+2            /file11
+2            /file10
+2            /file9
+2            /file8
+2            /file7
+2            /file6
+2            /file5
+2            /file4
+2            /file3
+2            /file2
+2            /file1
+
+==========Read File Stats========
+
+COUNT:  	  FILE NAME
+
+==========Write File Stats========
+
+COUNT:  	  FILE NAME
+
+==========Directory open stats========
+
+COUNT:  	  DIRECTORY NAME
+
+========Directory readdirp Stats=======
+
+COUNT:  	  DIRECTORY NAME
+
+========Read Throughput File Stats=====
+
+TIMESTAMP 			 THROUGHPUT(KBPS)	FILE NAME
+
+======Write Throughput File Stats======
+
+TIMESTAMP 			 THROUGHPUT(KBPS)	FILE NAME
