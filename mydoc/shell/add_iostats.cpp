@@ -11,7 +11,7 @@
 #include <string.h>
 
 #define XLATOR_BEGIN "volume "
-
+#define SUBXLATOR_BEGIN "subvolumes "
 
 using namespace std;
 
@@ -25,6 +25,7 @@ private:
     int pos;
     string xlator_config;
     vector<string> iostat_config;
+    static int count;
 public:
     Xlator();
     // 在当前xlator之后增加层iostat xlator
@@ -32,7 +33,6 @@ public:
     void init(string xlator_config, map<string, string>& mpXlator);
 
 };
-
 
 
 class Graph{
@@ -55,6 +55,45 @@ public:
     bool buildNewConfigFile();
     Xlator* find_first_iostat();
 };
+
+
+
+string getvolname(string xlator_config) {
+    int volnamepos = xlator_config.find(XLATOR_BEGIN);
+    string volname;
+    for (int i = volnamepos + strlen(XLATOR_BEGIN); !isspace(xlator_config[i]); i++) {
+        volname = volname + xlator_config[i];
+    }
+    return volname;
+}
+
+
+vector<string> getsubvolname(string xlator_config) {
+    int volnamepos = xlator_config.find(SUBXLATOR_BEGIN);
+    string volname;
+    for (int i = volnamepos + strlen(SUBXLATOR_BEGIN); (xlator_config[i] != '\n'); i++) {
+        volname = volname + xlator_config[i];
+    }
+    vector<string> volnames; 
+    string subvolname;
+    for (int i = 0; i < volname.size(); i++) {
+        if (volname[i] == ' ') {
+            volnames.push_back(subvolname);
+            subvolname = "";
+            while(i+1 < volname.size() && volname[i+1] == ' ') {
+                i++;
+            }
+            continue;
+        }
+        subvolname = subvolname + volname[i];
+    }
+    return volnames;
+}
+
+
+
+
+int Xlator::count = 0;
 
 void
 Xlator::addiostats(Xlator* iostat) {
@@ -94,18 +133,20 @@ Xlator::addiostats(Xlator* iostat) {
 
 
 void 
-Xlator::init(string xlator_config, map<string, string>& mpXlator) {
-    this->xlator_config = xlator_config;
-    // string volname;
-    // Xlator* next;
-    // Xlator* prev;
-    // vector<Xlator*> child;
-    // int pos;
-    // string xlator_config;
-    // vector<string> iostat_config;
-    int volnamepos = xlator_config.find(XLATOR_BEGIN);
-    for (int i = volnamepos + strlen(XLATOR_BEGIN); !isspace(xlator_config[i]); i++) {
-        volname = volname + xlator_config[i];
+Xlator::init(string parseVolname, map<string, string>& mpXlator) {
+    this->xlator_config = mpXlator[parseVolname];
+    volname = parseVolname;
+    vector<string> subvolnums = getsubvolname(xlator_config);
+    Xlator* cur = this;
+    this->pos = Xlator::count++;
+    for (int i = 0; i < subvolnums.size(); i++) {
+        Xlator* subvolnum = new Xlator();
+
+        subvolnum->prev = cur;
+        cur->next = subvolnum;
+        child.push_back(subvolnum);
+
+        subvolnum->init(getvolname(subvolnums[i]), mpXlator);
     }
 
 }
@@ -162,7 +203,13 @@ Graph::initGraph() {
 
 map<string, string> 
 Graph::makemp(vector<string>& xlatorlist) {
-    
+    map<string, string> mp;
+    for (int i = 0; i < xlatorlist.size(); i++) {
+        string xlator_config = xlatorlist[i];
+        string volname = getvolname(xlator_config);
+        mp[volname] = xlator_config;
+    }
+    return mp;
 }
 
 
@@ -173,8 +220,9 @@ Graph::buildGraph(vector<string>& xlatorlist) {
         return false;
     }
     head = new Xlator();
-    head->init(xlatorlist.back(), xlatorlist);
-
+    map<string, string> mpXlator = makemp(xlatorlist);
+    head->init(getvolname(xlatorlist.back()), mpXlator);
+    return true;
 }
 
 
@@ -208,6 +256,8 @@ int main() {
     mygraph->setpath("/home/DEEPROUTE/xiaobaowen/work/shell/trusted-vol.tcp-fuse.vol");
 
     mygraph->initGraph();
+
+    
     return 0;
 }
 
