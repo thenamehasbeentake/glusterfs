@@ -3633,7 +3633,7 @@ io_priv(xlator_t *this)
         return -1;
 
 #ifdef DEBUG
-#define WXBFROFILE "/var/log/glusterfs/io-stats-profile"
+#define WXBFROFILE "/var/log/glusterfs/io-stats-profile-"
 // add profile in fuse process
     // gluster v set volname diagnostics.fop-sample-buf-size 59999
     // == gluster v profile volname info > 
@@ -3649,7 +3649,7 @@ io_priv(xlator_t *this)
     char filename[PATH_MAX];
 
     // file named with child xlator
-    snprintf(filename, PATH_MAX, "%s%s", WXBFROFILE, this->next->name);
+    snprintf(filename, PATH_MAX, "%s%s", WXBFROFILE, this->children->xlator->name);
     logfp = fopen(filename, "w+");
     if (logfp == NULL) {
         gf_log("wxb", GF_LOG_ERROR, "in io-stats.c:io_priv, fopen %s fail", filename);
