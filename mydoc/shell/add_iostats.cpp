@@ -16,6 +16,7 @@
 #define XLATOR_TYPE_BEGIN "type "
 #define IOSTATS_XLATOR_TYPE "debug/io-stats"
 #define XLATOR_TYPE_BEGIN "type "
+#define XLATOR_PATH "/var/log/glusterfs/xlator.list"
 using namespace std;
 
 class Xlator;
@@ -45,6 +46,8 @@ public:
     vector<string> getNewConfig();
     void display();
     Xlator* getNext() { return next; }
+    string getVolname() { return volname; }
+    string getType() { return type; }
 };
 
 
@@ -67,6 +70,8 @@ public:
     bool buildGraph(vector<string>& xlatorlist);
     string buildNewConfigFile();
     size_t write_back(string s);
+    string getXlatorNameList();
+    void write_xlaorlist(string str);
     ~ Graph();
 };
 
@@ -379,8 +384,37 @@ Graph::write_back(string s) {
 
     write(fd, s.c_str(), s.size());
 
+    close(fd);
 }
 
+string 
+Graph::getXlatorNameList() {
+    string xlatornamelist;
+
+    Xlator* cur = head;
+
+    while (cur) {
+        if (cur->getType() != IOSTATS_XLATOR_TYPE)
+            xlatornamelist = xlatornamelist + cur->getVolname() + "\n";
+        cur = cur->getNext();
+    }
+    return xlatornamelist;
+}
+
+void 
+Graph::write_xlaorlist(string str) {
+
+    int fd = open(XLATOR_PATH, O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+    if (fd < 0) {
+        cout << "error open fail" << endl;
+    }
+
+    write(fd, str.c_str(), str.size());
+
+    fdatasync(fd);
+
+    close(fd);
+}
 
 Graph::~ Graph() {
     vector<Xlator*> list;
@@ -399,8 +433,8 @@ Graph::~ Graph() {
 int main(int argc, char *argv[]) {
 
     Graph* mygraph = new Graph();
-    mygraph->setpath("/home/DEEPROUTE/xiaobaowen/work/shell/trusted-vol.tcp-fuse.vol");
-    mygraph->setpath("/home/DEEPROUTE/xiaobaowen/work/code/glusterfs/mydoc/shell/trusted-vol2.tcp-fuse.vol");
+    // mygraph->setpath("/home/DEEPROUTE/xiaobaowen/work/shell/trusted-vol.tcp-fuse.vol");
+    // mygraph->setpath("/home/DEEPROUTE/xiaobaowen/work/code/glusterfs/mydoc/shell/trusted-vol2.tcp-fuse.vol");
 
     assert(argc == 2);
 
@@ -412,11 +446,15 @@ int main(int argc, char *argv[]) {
     mygraph->setpath(argv[1]);
     mygraph->initGraph();
     
+    string profileXlator = mygraph->getXlatorNameList();
+
+    cout << profileXlator << endl;
+    mygraph->write_xlaorlist(profileXlator);
 
     string newfile = mygraph->buildNewConfigFile();
     mygraph->write_back(newfile);
 
-
+    
     delete mygraph;
 
     return 0;

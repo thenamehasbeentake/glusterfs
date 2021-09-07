@@ -1306,7 +1306,7 @@ struct volume_options options[] = {
     {
         .key = {"readdir-ahead"},
         .type = GF_OPTION_TYPE_BOOL,
-        .default_value = "off",
+        .default_value = "off",                 // on
         .description = "enable/disable readdir-ahead",
         .op_version = {GD_OP_VERSION_6_0},
         .flags = OPT_FLAG_SETTABLE,
@@ -1315,7 +1315,7 @@ struct volume_options options[] = {
         .key = {"rda-request-size"},
         .type = GF_OPTION_TYPE_SIZET,
         .min = 4096,
-        .max = 131072,
+        .max = 131072,                          // 4M
         .default_value = "131072",
         .description = "size of buffer in readdirp calls initiated by "
                        "readdir-ahead ",
@@ -1325,7 +1325,7 @@ struct volume_options options[] = {
         .type = GF_OPTION_TYPE_SIZET,
         .min = 0,
         .max = 10 * GF_UNIT_MB,
-        .default_value = "4096",
+        .default_value = "4096",                // 10M
         .description = "the value under which readdir-ahead plugs",
     },
     {
@@ -1333,7 +1333,7 @@ struct volume_options options[] = {
         .type = GF_OPTION_TYPE_SIZET,
         .min = 0,
         .max = 100 * GF_UNIT_MB,
-        .default_value = "128KB",
+        .default_value = "128KB",               // 100M
         .description = "the value over which readdir-ahead unplugs",
     },
     {
@@ -1341,7 +1341,7 @@ struct volume_options options[] = {
         .type = GF_OPTION_TYPE_SIZET,
         .min = 0,
         .max = INFINITY,
-        .default_value = "10MB",
+        .default_value = "10MB",                // 100M
         .description = "maximum size of cache consumed by readdir-ahead "
                        "xlator. This value is global and total memory "
                        "consumption by readdir-ahead is capped by this "
@@ -1352,7 +1352,7 @@ struct volume_options options[] = {
      .type = GF_OPTION_TYPE_BOOL,
      .op_version = {GD_OP_VERSION_3_10_0},
      .flags = OPT_FLAG_SETTABLE | OPT_FLAG_CLIENT_OPT | OPT_FLAG_DOC,
-     .default_value = "off",
+     .default_value = "off",                    // on
      .description = "If this option is enabled, the readdir operation "
                     "is performed in parallel on all the bricks, thus "
                     "improving the performance of readdir. Note that "
@@ -1360,7 +1360,7 @@ struct volume_options options[] = {
                     "clusters"},
     {.key = {"pass-through"},
      .type = GF_OPTION_TYPE_BOOL,
-     .default_value = "false",
+     .default_value = "false",                  // false
      .op_version = {GD_OP_VERSION_4_1_0},
      .flags = OPT_FLAG_SETTABLE | OPT_FLAG_DOC | OPT_FLAG_CLIENT_OPT,
      .tags = {"readdir-ahead"},
