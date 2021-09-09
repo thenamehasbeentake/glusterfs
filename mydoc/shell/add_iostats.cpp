@@ -1,4 +1,5 @@
 #include <vector>
+#include <queue>
 #include <string>
 #include <map>
 #include <iostream>
@@ -205,30 +206,73 @@ Xlator::addiostats_recursion(Xlator* iostat) {
 
 
 
+// void 
+// Xlator::init(string parseVolname, map<string, string>& mpXlator) {
+//     if (parseVolname.empty()) {
+//         return;
+//     }
+
+//     xlator_config = mpXlator[parseVolname];
+//     volname = parseVolname;
+//     type = gettype(xlator_config);
+
+//     vector<string> subvolnums = getsubvolname(xlator_config);
+//     Xlator* cur = this;
+//     this->pos = Xlator::count++;
+
+//     for (int i = subvolnums.size() -1; i >= 0; i--) {
+
+//         Xlator* subvolnum = new Xlator();
+//         subvolnum->prev = cur;
+//         cur->next = subvolnum;
+//         child.push_back(subvolnum);
+
+//         subvolnum->init(subvolnums[i], mpXlator);
+
+//         cur = subvolnum;
+//     }
+
+// }
+
+ 
 void 
 Xlator::init(string parseVolname, map<string, string>& mpXlator) {
     if (parseVolname.empty()) {
         return;
     }
+    static queue<Xlator*> que;
+    que.push(this);
 
-    xlator_config = mpXlator[parseVolname];
-    volname = parseVolname;
-    type = gettype(xlator_config);
-
-    vector<string> subvolnums = getsubvolname(xlator_config);
     Xlator* cur = this;
-    this->pos = Xlator::count++;
 
-    for (int i = subvolnums.size() -1; i >= 0; i--) {
+    cur->xlator_config = mpXlator[parseVolname];
+    cur->volname = parseVolname;
+    cur->type = gettype(cur->xlator_config);
 
-        Xlator* subvolnum = new Xlator();
+    while (!que.empty()) {
+        cur = que.front();
+        que.pop();
+// cout << "cur volname:\t" << cur->volname << endl;
 
-        subvolnum->prev = cur;
-        cur->next = subvolnum;
-        child.push_back(subvolnum);
-        subvolnum->init(subvolnums[i], mpXlator);
+        vector<string> subvolnums = getsubvolname(cur->xlator_config);
+        this->pos = Xlator::count++;
 
-        cur = subvolnum;
+        for (int i = subvolnums.size() -1; i >= 0 && !subvolnums.empty(); i--) {
+
+            Xlator* subvolnum = new Xlator();
+            que.push(subvolnum);
+            cur->child.push_back(subvolnum);
+
+            subvolnum->xlator_config = mpXlator[subvolnums[i]];
+            subvolnum->volname = subvolnums[i];
+            subvolnum->type = gettype(subvolnum->xlator_config);
+        }
+
+        if (!que.empty()) {
+            cur->next = que.front();
+            que.front()->prev = cur;
+        }
+
     }
 
 }
