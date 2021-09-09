@@ -146,6 +146,7 @@ Xlator::addiostats(Xlator* iostat) {
     }
     vector<Xlator*> child_temp = child;
     int temp = child_temp.size() + num++;
+    int nextnum = temp;
     for (auto beg = child_temp.begin(); beg != child_temp.end(); beg++) {
         Xlator* curchild = *beg;
 
@@ -171,6 +172,7 @@ Xlator::addiostats(Xlator* iostat) {
 
         iostat_config.push_back(add_config);
     }
+    num = nextnum;
 }
 
 
