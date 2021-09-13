@@ -56,7 +56,7 @@ get_rda_fd_ctx(fd_t *fd, xlator_t *this)
     struct rda_fd_ctx *ctx;
 
     LOCK(&fd->lock);
-
+    // 上下文状态初始化为 RDA_FD_NEW
     if (__fd_ctx_get(fd, this, &val) < 0) {
         ctx = GF_CALLOC(1, sizeof(struct rda_fd_ctx), gf_rda_mt_rda_fd_ctx);
         if (!ctx)
@@ -340,7 +340,7 @@ __rda_fill_readdirp(xlator_t *this, gf_dirent_t *entries, size_t request_size,
         ctx->cur_offset = dirent->d_off;
         count++;
     }
-
+    // 缓存size少于rda_low_wmark 低水位， 状态位 置位RDA_FD_PLUGGED
     if (ctx->cur_size <= priv->rda_low_wmark)
         ctx->state |= RDA_FD_PLUGGED;
 
@@ -354,9 +354,10 @@ __rda_serve_readdirp(xlator_t *this, struct rda_fd_ctx *ctx, size_t size,
     int32_t ret = 0;
 
     ret = __rda_fill_readdirp(this, entries, size, ctx);
-
+    // 缓存中取出0
     if (!ret && (ctx->state & RDA_FD_ERROR)) {
         ret = -1;
+        // 失败， 更新error并pass(下次重新拉缓存)
         ctx->state &= ~RDA_FD_ERROR;
 
         /*
@@ -384,17 +385,17 @@ rda_readdirp(call_frame_t *frame, xlator_t *this, fd_t *fd, size_t size,
     int ret = 0;
     int op_errno = 0;
     gf_boolean_t serve = _gf_false;
-
+    // 获取上下文
     ctx = get_rda_fd_ctx(fd, this);
     if (!ctx)
         goto err;
-
+    // bypass 就 wind 下去， 相当于缓存miss
     if (ctx->state & RDA_FD_BYPASS)
         goto bypass;
 
     INIT_LIST_HEAD(&entries.list);
     LOCK(&ctx->lock);
-
+    // 再检查一遍，可能正在切换为bypass， 但是由bypass切换为非bypass状态可以忽略
     /* recheck now that we have the lock */
     if (ctx->state & RDA_FD_BYPASS) {
         UNLOCK(&ctx->lock);
@@ -405,7 +406,10 @@ rda_readdirp(call_frame_t *frame, xlator_t *this, fd_t *fd, size_t size,
      * If a new read comes in at offset 0 and the buffer has been
      * completed, reset the context and kickstart the filler again.
      */
+    // 如果在偏移量 0 处有新的读取并且缓冲区已完成，则重置上下文并再次启动填充器。
+    // RDA_FD_EOD是在什么时候设置的？
     if (!off && (ctx->state & RDA_FD_EOD) && (ctx->cur_size == 0)) {
+        // 新的从0开始的请求，ctx读完，且当前size为0，重置ctx
         rda_reset_ctx(this, ctx);
         /*
          * Unref and discard the 'list of xattrs to be fetched'
@@ -415,7 +419,15 @@ rda_readdirp(call_frame_t *frame, xlator_t *this, fd_t *fd, size_t size,
          * call and use that for all subsequent internal readdirp()
          * requests issued by this xlator.
          */
+        /*
+            取消引用并丢弃在 opendir 调用期间存储的“要获取的 xattr 列表”。
+            这是在上面完成的 - 在 rda_reset_ctx() 内部。
+            现在，在实际 readdirp() 调用中引用 md-cache 传递的 xdata，
+            并将其用于此 xlator 发出的所有后续内部 readdirp() 请求。
+        */
+        // 拷贝从上层wind下来的xdata
         ctx->xattrs = dict_ref(xdata);
+        // 需要填充ctx中的缓存
         fill = 1;
     }
 
@@ -423,6 +435,9 @@ rda_readdirp(call_frame_t *frame, xlator_t *this, fd_t *fd, size_t size,
      * If a readdir occurs at an unexpected offset or we already have a
      * request pending, admit defeat and just get out of the way.
      */
+    /*
+     * 如果 readdir 发生在意外的偏移处，或者我们已经有一个待处理的请求，承认失败并passby。
+    */
     if (off != ctx->cur_offset || ctx->stub) {
         ctx->state |= RDA_FD_BYPASS;
         UNLOCK(&ctx->lock);
@@ -434,6 +449,10 @@ rda_readdirp(call_frame_t *frame, xlator_t *this, fd_t *fd, size_t size,
      * the request out of the preload or the request that enables us to do
      * so is in flight...
      */
+    /*
+     * 如果我们没有绕过预加载，这意味着我们可以在预加载之外提供请求，或者使我们能够这样做的请求在飞行中。
+    */
+
     if (rda_can_serve_readdirp(ctx, size)) {
         ret = __rda_serve_readdirp(this, ctx, size, &entries, &op_errno);
         serve = _gf_true;
@@ -442,12 +461,13 @@ rda_readdirp(call_frame_t *frame, xlator_t *this, fd_t *fd, size_t size,
             !((ctx->state & RDA_FD_EOD) && (ctx->cur_size == 0)))
             op_errno = 0;
     } else {
+        // 创建一个readdirp的桩
         ctx->stub = fop_readdirp_stub(frame, NULL, fd, size, off, xdata);
         if (!ctx->stub) {
             UNLOCK(&ctx->lock);
             goto err;
         }
-
+        // 当前状态没有running
         if (!(ctx->state & RDA_FD_RUNNING)) {
             fill = 1;
             if (!ctx->xattrs)
@@ -560,7 +580,7 @@ rda_fill_fd_cbk(call_frame_t *frame, void *cookie, xlator_t *this,
     }
 
     GF_ATOMIC_DEC(ctx->prefetching);
-
+    // 高水位
     if (ctx->cur_size >= priv->rda_high_wmark)
         ctx->state &= ~RDA_FD_PLUGGED;
 
@@ -654,7 +674,7 @@ rda_fill_fd(call_frame_t *frame, xlator_t *this, fd_t *fd)
         goto err;
 
     LOCK(&ctx->lock);
-
+    // 新创建的ctx， 状态转换为运行和plugged
     if (ctx->state & RDA_FD_NEW) {
         ctx->state &= ~RDA_FD_NEW;
         ctx->state |= RDA_FD_RUNNING;
