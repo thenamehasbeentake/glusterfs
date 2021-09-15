@@ -95,8 +95,8 @@ gf_changelog_ctx_defaults_init(glusterfs_ctx_t *ctx)
     ctx->process_uuid = generate_glusterfs_ctx_id();
     if (!ctx->process_uuid)
         return -1;
-
-    ctx->page_size = 128 * GF_UNIT_KB;
+/*wxb  128 -> 1024*/
+    ctx->page_size = 1024 * GF_UNIT_KB;
 
     ctx->iobuf_pool = iobuf_pool_new();
     if (!ctx->iobuf_pool)

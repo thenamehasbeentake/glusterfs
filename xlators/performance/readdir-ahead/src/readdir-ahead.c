@@ -1315,8 +1315,8 @@ struct volume_options options[] = {
         .key = {"rda-request-size"},
         .type = GF_OPTION_TYPE_SIZET,
         .min = 4096,
-        .max = 131072,
-        .default_value = "131072",
+        .max = 10485760,
+        .default_value = "1048576",
         .description = "size of buffer in readdirp calls initiated by "
                        "readdir-ahead ",
     },

@@ -19,9 +19,9 @@
 #include "fnmatch.h"
 
 #include <libgen.h>
-
+/*wxb  128 -> 1024*/
 #ifndef GF_BLOCK_READV_SIZE
-#define GF_BLOCK_READV_SIZE (128 * GF_UNIT_KB)
+#define GF_BLOCK_READV_SIZE (1024 * GF_UNIT_KB)
 #endif
 
 #ifndef GF_DEFAULT_MAX_FILE_SIZE
