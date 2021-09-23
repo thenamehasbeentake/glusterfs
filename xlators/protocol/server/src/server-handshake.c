@@ -108,8 +108,6 @@ do_path_lookup(xlator_t *xl, dict_t *dict, inode_t *parinode, char *basename)
     if (ret < 0) {
         gf_log(xl->name, GF_LOG_ERROR, "first lookup on subdir (%s) failed: %s",
                basename, strerror(errno));
-        inode_unref(loc.inode);
-        loc.inode = NULL;
     }
 
     /* Inode linking is required so that the
