@@ -74,10 +74,12 @@ struct fuse_ll {
 struct fuse_ll {
     int debug;
     int allow_root;
+    // fuse低版本兼容
     struct fuse_lowlevel_ops op;
     int got_init;
     void *userdata;
     uid_t owner;
+    // 连接参数设置，init的时候传入
     struct fuse_conn_info conn;
     struct fuse_req list;
     struct fuse_req interrupts;
