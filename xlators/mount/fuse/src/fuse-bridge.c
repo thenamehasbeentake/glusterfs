@@ -63,7 +63,9 @@
 struct fuse_private {
         int                  fd;
         struct fuse         *fuse;
+        // session 会话
         struct fuse_session *se;
+        // channel 通信
         struct fuse_chan    *ch;
         char                *volfile;
         size_t               volfile_size;

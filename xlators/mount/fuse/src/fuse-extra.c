@@ -38,7 +38,9 @@ struct fuse_req {
     uint64_t unique;
     int ctr;
     pthread_mutex_t lock;
+    // 请求的上下文
     struct fuse_ctx ctx;
+    // 互斥锁、ctr+fd
     struct fuse_chan *ch;
     int interrupted;
     union {

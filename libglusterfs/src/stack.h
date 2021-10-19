@@ -135,7 +135,7 @@ STACK_DESTROY (call_stack_t *stack)
 
 #define cbk(x) cbk_##x
 
-
+// 调用者的frame，child xlator obj， 生成xlator obj自己的_new frame
 /* make a call */
 #define STACK_WIND(frame, rfn, obj, fn, params ...)			\
 	do {								\
