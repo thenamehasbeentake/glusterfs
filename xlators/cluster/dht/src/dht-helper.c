@@ -939,7 +939,7 @@ dht_subvol_get_hashed (xlator_t *this, loc_t *loc)
         GF_VALIDATE_OR_GOTO (this->name, conf, out);
 
         methods = &(conf->methods);
-
+        // 如果是根节点，直接取第一个up的subvol，因为这个时候layout还没建立起来？
         if (__is_root_gfid (loc->gfid)) {
                 subvol = dht_first_up_subvol (this);
                 goto out;
@@ -956,7 +956,7 @@ dht_subvol_get_hashed (xlator_t *this, loc_t *loc)
                               loc->path, uuid_utoa (loc->parent->gfid));
                 goto out;
         }
-
+        // 根据name 计算hash值， 根据layout区间确定在哪个subvol中
         subvol = methods->layout_search (this, layout, loc->name);
 
         if (!subvol) {

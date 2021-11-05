@@ -5868,8 +5868,11 @@ fini (xlator_t *this_xl)
 struct xlator_fops fops;
 
 struct xlator_cbks cbks = {
+        // inode invalidate   缓存失效?
         .invalidate = fuse_invalidate,
+        // inode forget
         .forget     = fuse_forget_cbk,
+        // file descripors release
         .release    = fuse_internal_release
 };
 

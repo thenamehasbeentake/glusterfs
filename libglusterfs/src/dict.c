@@ -956,6 +956,7 @@ data_from_uint32 (uint32_t value)
                 return NULL;
         }
         // PRIu32与PRIu64类似
+        // asprintf会动态申请内存，内部做了malloc，我们用完后需要自己释放资源
         ret = gf_asprintf (&data->data, "%"PRIu32, value);
         if (-1 == ret) {
                 gf_msg_debug ("dict", 0, "asprintf failed");
@@ -1006,7 +1007,7 @@ data_from_ptr_common (void *value, gf_boolean_t is_static)
 }
 
 // str转换成data，返回的data_t的is_static为1(value释放工作有调用者完成)，data_t的data浅拷贝
-data_t 
+data_t *
 str_to_data (char *value)
 {
         if (!value) {

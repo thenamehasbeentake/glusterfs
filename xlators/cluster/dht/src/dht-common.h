@@ -312,6 +312,7 @@ struct dht_local {
         uint32_t                 gid;
 
         /* needed by nufa */
+        // Non Uniform File Allocation 
         int32_t flags;
         mode_t  mode;
         dev_t   rdev;

@@ -2584,7 +2584,9 @@ dht_lookup (call_frame_t *frame, xlator_t *this,
         } else {
                 local->xattr_req = dict_new ();
         }
-
+        // pargfid 为空， gfid不为空， 当前loc的inode的gfid不是root。
+        // 什么情况下会出现这种现象？
+        // index 上的lookup？
         if (gf_uuid_is_null (loc->pargfid) && !gf_uuid_is_null (loc->gfid) &&
             !__is_root_gfid (loc->inode->gfid)) {
                 local->cached_subvol = NULL;
@@ -2592,19 +2594,23 @@ dht_lookup (call_frame_t *frame, xlator_t *this,
                 return 0;
         }
 
+        // 跟目录上的commithash ？？这个初始化的值有什么含义？
         if (__is_root_gfid(loc->gfid)) {
                 ret = dict_set_uint32 (local->xattr_req,
                                        conf->commithash_xattr_name,
                                        sizeof(uint32_t));
         }
 
+        // 未命中
         if (!hashed_subvol)
                 hashed_subvol = dht_subvol_get_hashed (this, loc);
         local->hashed_subvol = hashed_subvol;
 
-
+        // inode_ctx感觉不是在lookup里面set的。emmm，视力问题
         /* The entry has been looked up before and has an inode_ctx set
          */
+        // inode上下文拿不到layout，比较local->layout新生成的layout与xlator中的layout，版本值
+        // 版本太低，重新去取layout
         if (is_revalidate (loc)) {
                 layout = local->layout;
                 if (!layout) {
@@ -2658,6 +2664,7 @@ dht_lookup (call_frame_t *frame, xlator_t *this,
                                 "path %s", conf->link_xattr_name, loc->path);
                         goto err;
                 }
+                // dir 做 lookup，然后return？？？回调函数需要关注一下
                 if (IA_ISDIR (local->inode->ia_type)) {
                         local->call_cnt = call_cnt = conf->subvolume_cnt;
                         for (i = 0; i < call_cnt; i++) {
@@ -4884,7 +4891,7 @@ dht_statfs_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
                         if (event == _gf_true)
                                 action = qdstatfs_action_COMPARE;
                         else
-                                action = qdstatfs_action_NEGLECT;
+                                action = qdstatfs_action_NEGLECT;       // neglect忽略，疏忽，忘记
                         break;
 
                 case _gf_false:
@@ -4918,7 +4925,7 @@ dht_statfs_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
                                 cur_usage = local->statvfs.f_blocks -
                                              local->statvfs.f_bfree;
 
-                                /* Take the max of the usage from subvols */
+                                /* Take the max of the usage from subvols */ // ???
                                 if (new_usage >= cur_usage)
                                         local->statvfs = *statvfs;
                                 goto unlock;
@@ -4938,6 +4945,7 @@ dht_statfs_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
                         local->statvfs.f_frsize   = statvfs->f_frsize;
                 }
 
+                // 走到这里local->statvfs全是0
                 local->statvfs.f_blocks  += statvfs->f_blocks;
                 local->statvfs.f_bfree   += statvfs->f_bfree;
                 local->statvfs.f_bavail  += statvfs->f_bavail;
@@ -6376,6 +6384,7 @@ dht_mknod (call_frame_t *frame, xlator_t *this,
 
         if (conf->decommission_subvols_cnt) {
             for (i = 0; i < conf->subvolume_cnt; i++) {
+                // 落到了要被删除的区间上，说明当前layout是旧的，需要更新loc->parent的layout
                 if (conf->decommissioned_bricks[i] &&
                         conf->decommissioned_bricks[i] == subvol) {
 
@@ -6414,7 +6423,7 @@ dht_mknod (call_frame_t *frame, xlator_t *this,
                                         "parent loc build failed");
                                 goto err;
                         }
-
+                        // 先加inodelk,再lookup更新layout
                         ret = dht_mknod_lock (frame, subvol);
 
                         if (ret < 0) {
@@ -9408,6 +9417,7 @@ dht_notify (xlator_t *this, int event, void *data, ...)
                                 gf_defrag_stop (conf,
                                                 GF_DEFRAG_STATUS_STOPPED, output);
                         else if (cmd == GF_DEFRAG_CMD_PAUSE_TIER)
+                                // ???
                                 ret = gf_defrag_pause_tier (this, defrag);
                         else if (cmd == GF_DEFRAG_CMD_RESUME_TIER)
                                 ret = gf_defrag_resume_tier (this, defrag);

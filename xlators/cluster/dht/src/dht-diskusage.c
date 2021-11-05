@@ -47,7 +47,9 @@ dht_du_info_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
 
 	if (statvfs && statvfs->f_blocks) {
 		percent = (statvfs->f_bavail * 100) / statvfs->f_blocks;
+                // f_frsize 基本块大小 / 片段大小
 		bytes = (statvfs->f_bavail * statvfs->f_frsize);
+                // 这里的注释是说chunks数据类型为uint32_t的原因
                 /*
                  * A 32-bit count of 1MB chunks allows a maximum brick size of
                  * ~4PB.  It's possible that we could see a single local FS
@@ -56,7 +58,11 @@ dht_du_info_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
                  * the chunk size small so the layout-calculation code that
                  * uses this value can be tested on normal machines.
                  */
+                // f_bsize 用于传输的块大小。 f_frsize <= b_bsize
+                // 1MB数据需要传输多少次？？
+                // block per chunck, 1MB数据有多少block？？也就是1个chunk大小是1MB
                 bpc = (1 << 20) / statvfs->f_bsize;
+                // chunk数量。 总的block数量 除以 一个chunk多少block， 向上补齐， 得到chunk的数量
                 chunks = (statvfs->f_blocks + bpc - 1) / bpc;
 	}
 

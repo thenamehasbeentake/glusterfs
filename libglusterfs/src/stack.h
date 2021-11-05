@@ -284,7 +284,8 @@ STACK_RESET (call_stack_t *stack)
                 LOCK(&frame->root->stack_lock);                         \
                 {                                                       \
                         list_add (&_new->frames, &frame->root->myframes);\
-                        frame->ref_count++;                             \/* 当前frame ref的引用， 由其root的链表，导致的+1*/
+                        frame->ref_count++;                             \
+                        /* 当前frame ref的引用， 由其root的链表，导致的+1*/ \
                 }                                                       \
                 UNLOCK(&frame->root->stack_lock);                       \
                 fn##_cbk = rfn;                                         \

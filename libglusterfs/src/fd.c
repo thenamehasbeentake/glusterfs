@@ -894,6 +894,7 @@ __fd_ctx_set (fd_t *fd, xlator_t *xlator, uint64_t value)
         if (set_idx == -1) {            // 全用完了，扩容xlator->graph->xl_count
                 set_idx = fd->xl_count;         // fd->xl_count当前的 fd对应的xlator索引，对应_ctx的size
                 // 这两个fd->xl_count和xlator->graph->xl_count不太清楚是干啥用的
+                // 扩容一倍的xlator->graph->xl_count
                 new_xl_count = fd->xl_count + xlator->graph->xl_count;
 
                 tmp = GF_REALLOC (fd->_ctx,

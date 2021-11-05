@@ -47,7 +47,7 @@ dht_munge_name (const char *original, char *modified,
         regmatch_t  matches[2] = {{0}, };
         size_t      new_len    = 0;
         int         ret        = 0;
-
+        // 正则表达式的匹配
         ret = regexec(re, original, 2, matches, 0);
 
         if (ret != REG_NOMATCH) {
