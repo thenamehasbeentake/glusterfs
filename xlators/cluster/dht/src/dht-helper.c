@@ -240,6 +240,8 @@ out:
         return ret;
 }
 
+// 需要结合rebalance看
+// 判断迁移操作是否失效
 gf_boolean_t
 dht_mig_info_is_invalid (xlator_t *current, xlator_t *src_subvol,
                       xlator_t *dst_subvol)
@@ -260,6 +262,16 @@ dht_mig_info_is_invalid (xlator_t *current, xlator_t *src_subvol,
  * file has undergone multiple migrations and ends up on the same src_subvol
  * on which the mig_info was first set.
  */
+/*
+迁移信息存放在inode ctx中。取出迁移源subvol与目标subvol
+inode会存在一个subvol中，ctx中取出源subvol(一个区间)和目标subvol(另一个区间)。然后我们当前要去读的vol是current(inode in cache_vol),
+  现在current vol跟src不一致？？？？
+src_subvol 与发送当前操作的 subvol 不匹配，因此缓存的 subvol 在上次 mig_info_set 和现在之间发生了变化。 src_subvol == dst_subvol。
+迁移文件时没有任何 FOP 检测到 P2，因此旧的 dst 现在是当前的 subvol。还有一种情况可能会导致信息过时 - 
+如果文件经历了多次迁移并最终位于第一次设置 mig_info 的同一个 src_subvol 上。
+*/
+        // dst可能与src相同，先判断cur是否是dst，是的话迁移无效。
+        // 再判断cur是否为不为src，不为src，cur失效，发生了什么事情。使得inode本来应该在cur subvol，但是却从另一个src开始迁移？？？
         if ((current == dst_subvol) || (current != src_subvol))
                 return _gf_true;
 
@@ -519,7 +531,7 @@ dht_check_and_open_fd_on_subvol_task (void *data)
         gf_uuid_copy (loc.gfid, fd->inode->gfid);
 
         /* Open this on the dst subvol */
-
+        // 在目标子卷打开这个？？？
         SYNCTASK_SETID(0, 0);
 
         ret = syncop_open (subvol, &loc,
@@ -2165,6 +2177,10 @@ dht_get_lock_subvolume (xlator_t *this, struct gf_flock *lock,
                  * to prevent inode purging. inode unref will happen
                  * in unlock cbk code path.
                  */
+                /*
+                inode 清除可能发生在 lk 和 unlk 之间的 NFS 上。因此 lk 和 unlk 可能会被发送到不同的子卷。
+                因此，在锁定请求期间，对 inode 进行引用以防止 inode 清除。 inode unref 将发生在解锁 cbk 代码路径中。
+                */
                 inode_ref (inode);
         }
 

@@ -5508,7 +5508,7 @@ done:
                 if (!next_subvol) {
                         goto unwind;
                 }
-
+                // next_offset ???
                 STACK_WIND_COOKIE (frame, dht_readdir_cbk, next_subvol,
                                    next_subvol, next_subvol->fops->readdir,
                                    local->fd, (local->size - local->filled),
@@ -8267,7 +8267,7 @@ dht_rmdir_lock_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
                 local->op_errno = op_errno;
                 goto err;
         }
-
+        // hashed_subvol在哪儿删的???
         hashed_subvol = local->hashed_subvol;
         for (i = 0; i < conf->subvolume_cnt; i++) {
                 if (hashed_subvol &&

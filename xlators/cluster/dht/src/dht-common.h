@@ -740,7 +740,7 @@ typedef struct dht_fd_ctx {
 #define DHT_MIGRATION_COMPLETED   2
 
 #define check_is_linkfile(i,s,x,n) (IS_DHT_LINKFILE_MODE (s) && dict_get (x, n))
-
+// 普通文件且mode中除了文件类型之外只有黏着位 置1
 #define IS_DHT_MIGRATION_PHASE2(buf)  (                                 \
                 IA_ISREG ((buf)->ia_type) &&                            \
                 ((st_mode_from_ia ((buf)->ia_prot, (buf)->ia_type) &    \

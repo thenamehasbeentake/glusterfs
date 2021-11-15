@@ -482,10 +482,11 @@ dht_readv_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
                                                   &src_subvol,
                                                   &dst_subvol);
 
+                // 迁移操作失效，或者说fd没有打开在迁移目标subvol上
                 if (dht_mig_info_is_invalid (local->cached_subvol,
                                              src_subvol, dst_subvol)
                         || !dht_fd_open_on_dst(this, local->fd, dst_subvol)) {
-
+                        // 检查迁移操作是否结束
                         ret = dht_rebalance_complete_check (this, frame);
                         if (!ret)
                                 return 0;
@@ -610,6 +611,7 @@ dht_access_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
                 goto out;
         if (local->call_cnt != 1)
                 goto out;
+        // 网络断开 或者 目录inode丢失，去next subvol找
         if ((op_ret == -1) && ((op_errno == ENOTCONN) ||
                 dht_inode_missing(op_errno)) &&
                 IA_ISDIR(local->loc.inode->ia_type)) {
@@ -627,6 +629,7 @@ dht_access_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
                                    local->rebalance.flags, NULL);
                 return 0;
         }
+        // inode丢失并且不是目录，可能被迁移走了
         if ((op_ret == -1) && dht_inode_missing(op_errno) &&
                 !(IA_ISDIR(local->loc.inode->ia_type))) {
                 /* File would be migrated to other node */
