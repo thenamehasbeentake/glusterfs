@@ -478,6 +478,7 @@ __afr_inode_read_subvol_get (inode_t *inode, xlator_t *this,
 							 metadata, event_p);
 	else
 		/* TBD: allocate structure with array and read from it */
+                // 超过16副本？？？
 		ret = -1;
 
 	return ret;
@@ -1274,7 +1275,7 @@ afr_inode_refresh_done (call_frame_t *frame, xlator_t *this, int error)
 
         if (local->op == GF_FOP_LOOKUP ||
             (local->is_read_txn && !priv->quorum_reads))
-                goto interpret;
+                goto interpret;         // 跳过quorum的检查
 
         if (!afr_has_quorum (success_replies, this)) {
                 error = afr_final_errno (frame->local, this->private);
@@ -1283,6 +1284,7 @@ afr_inode_refresh_done (call_frame_t *frame, xlator_t *this, int error)
                 goto refresh_done;
         }
 
+// ？？？ 无需编译直接运行？
 interpret:
 	ret = afr_replies_interpret (frame, this, local->refreshinode,
                                      &start_heal);
@@ -1625,7 +1627,10 @@ out:
         return ret;
 }
 
-
+/*
+hash mode > 1且不是目录，根据pid做hash
+hash mode 其他，根据gfid做hash
+*/
 int
 afr_hash_child (afr_read_subvol_args_t *args, int32_t child_count, int hashmode)
 {
@@ -1686,6 +1691,7 @@ afr_read_subvol_select_by_policy (inode_t *inode, xlator_t *this,
 	if (read_subvol >= 0 && readable[read_subvol])
                 return read_subvol;
 
+        // hash read subvol 不可读。遍历找一个可读的读
 	for (i = 0; i < priv->child_count; i++) {
                 if (readable[i])
                 return i;
@@ -1735,14 +1741,16 @@ afr_read_subvol_get (inode_t *inode, xlator_t *this, int *subvol_p,
 	metadata_readable = alloca0 (priv->child_count);
 	intersection = alloca0 (priv->child_count);
 
+        // 可以数据读的child xlator，从ctx中获取
 	afr_inode_read_subvol_type_get (inode, this, readable, &event, type);
 
 	afr_inode_read_subvol_get (inode, this, data_readable, metadata_readable,
 				   &event);
 
+        // 数据和元数据都可以读的child
 	AFR_INTERSECT (intersection, data_readable, metadata_readable,
 		       priv->child_count);
-
+        // 遍历intersection中不为空的元素数量, 优先从元数据和数据都能读的subvol读
 	if (AFR_COUNT (intersection, priv->child_count) > 0)
 		subvol = afr_read_subvol_select_by_policy (inode, this,
 							   intersection, args);
@@ -2596,6 +2604,7 @@ afr_is_pending_set (xlator_t *this, dict_t *xdata, int type)
                 }
         }
 
+        // ???
         for (i = 0; i < priv->child_count; i++) {
                 if (dict_get_ptr (xdata, priv->pending_key[i],
                                   &pending_raw))
@@ -2644,11 +2653,12 @@ afr_can_start_metadata_self_heal(call_frame_t *frame, xlator_t *this)
                         start = _gf_false;
                         break;
                 }
-
+                // 第一个异常的reply的与当前reply不同的uuid
                 if (gf_uuid_compare (stbuf.ia_gfid, replies[i].poststat.ia_gfid)) {
                         start = _gf_false;
                         break;
                 }
+                // inode对应 文件类型不同ia_type。(脑裂无法self_heal)
                 if (!IA_EQUAL (stbuf, replies[i].poststat, type)) {
                         start = _gf_false;
                         break;
@@ -2997,6 +3007,7 @@ afr_discover_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
                 afr_attempt_local_discovery (this, child_index);
 
         if (xdata) {
+                // 需要修复次数？ link-count可能是.glusterfs/indices/xattrop/这个目录下的？
                 ret = dict_get_int8 (xdata, "link-count", &need_heal);
                 local->replies[child_index].need_heal = need_heal;
         } else {
@@ -3210,6 +3221,18 @@ out:
  *   lookup with EIO. Something has gone wrong beyond reasonable action.
  */
 
+/*
+匿名loc
+        afr_discover-> 
+                        如果是root_gfid, afr xlator拷贝inode_table及root inode，根据choose_local设置 是否需要discover本地children xlator是不是本地的 参数
+                                如果uuid是空的，afr_discover_do，字典中设置各种data，metadata，entry 初始化， 根据discover local ， wind getfattr "/" , trusted.glusterfs.pathinfo， 根据返回的hostname判断brick是否在本地
+                                lookup操作wind下去，所有upchild 返回完之后，检查是否需要修复metadata，主要是xdata中的metadata和 uid gid prot。类型不同的脑裂不予修复
+                        
+lookup跟目录下的loc, .landfill目录 回收站使用 无权限访问
+
+
+
+*/
 int
 afr_lookup (call_frame_t *frame, xlator_t *this, loc_t *loc, dict_t *xattr_req)
 {
@@ -3266,6 +3289,7 @@ afr_lookup (call_frame_t *frame, xlator_t *this, loc_t *loc, dict_t *xattr_req)
 	afr_read_subvol_get (loc->parent, this, NULL, NULL, &event,
 			     AFR_DATA_TRANSACTION, NULL);
 
+        // event != local->event_generation || ctx->need_refresh
 	if (afr_is_inode_refresh_reqd (loc->inode, this, event,
                                        local->event_generation))
 		afr_inode_refresh (frame, this, loc->parent, NULL,
@@ -3481,6 +3505,7 @@ afr_flush_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
 
         LOCK (&frame->lock);
         {
+                // fail， success会覆盖op_ret值吗？
                 if (op_ret != -1) {
 			local->op_ret = op_ret;
 			if (!local->xdata_rsp && xdata)
@@ -4580,6 +4605,7 @@ afr_lk_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
                                    local->xdata_req);
         } else if (priv->quorum_count &&
                    !afr_has_quorum (local->cont.lk.locked_nodes, this)) {
+                // flock结束，但是不符合仲裁条件
                 local->op_ret   = -1;
                 local->op_errno = afr_final_errno (local, priv);
 

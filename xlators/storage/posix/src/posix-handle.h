@@ -213,7 +213,7 @@
         /* __ret == -1 && errno == ELOOP */                             \
         } while (0)
 
-
+// strstr (loc->name, "../")???
 #define MAKE_ENTRY_HANDLE(entp, parp, this, loc, ent_p) do {            \
         char *__parp;                                                   \
                                                                         \

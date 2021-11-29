@@ -973,6 +973,8 @@ struct volume_options options[] = {
           .type = GF_OPTION_TYPE_STR,
           .value = { "none", "auto", "fixed"},
           .default_value = "none",
+          // fixed 固定值quorum-count, 达到这个数量的仲裁brick就可以写入。
+          // auto 超过一半brick才能写入
           .description = "If value is \"fixed\" only allow writes if "
                          "quorum-count bricks are present.  If value is "
                          "\"auto\" only allow writes if more than half of "

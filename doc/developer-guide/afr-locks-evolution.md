@@ -58,6 +58,7 @@ To prevent parallel self heals, another domain was introduced, let us call it SE
 + 2.shd takes (full inodelk on DATA_DOMAIN)
 + 3.shd inspects xattrs  to determine source/sink
 + 4.unlock full lock on DATA_DOMAIN
+  + 这里发生写操作在sink成功source失败，引起脑裂，修复仍然会继续，造成数据损坏
 + 5.take chunk lock(0-128kb) on DATA_DOMAIN
 + 6.heal
 + 7.take next chunk lock(129-256kb) on DATA_DOMAIN

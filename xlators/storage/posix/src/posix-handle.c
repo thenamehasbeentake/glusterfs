@@ -982,6 +982,7 @@ posix_create_link_if_gfid_exists (xlator_t *this, uuid_t gfid, char *real_path,
 
                         POSIX_GET_FILE_UNLINK_PATH (priv->base_path, gfid,
                                                     unlink_path);
+                        // ????
                         ret = sys_link (unlink_path, real_path);
                         if (ret) {
                                 gf_msg (this->name, GF_LOG_WARNING, errno,

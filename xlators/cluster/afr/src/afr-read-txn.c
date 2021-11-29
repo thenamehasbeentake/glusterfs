@@ -169,6 +169,25 @@ afr_read_txn_wipe (call_frame_t *frame, xlator_t *this)
     kept 0 by afr_inode_refresh() and readable[] will be set 0 for
     all elements. Therefore reads always fail.
 */
+/*
+afr_read_txn:
+
+  这是读取事务功能。它的工作方式：
+
+  - 从 inode ctx 确定读取子卷。
+
+  - 如果 read-subvolume 的生成过时，通过调用 afr_inode_refresh() 刷新一次 ctx
+
+    否则尝试读取 read-subvolume。
+
+  - 如果在 read-subvolume 上尝试读取失败，则通过调用 afr_inode_refresh() 刷新一次 ctx
+
+  - ctx 刷新后，重新查询 read-subvolume 并尝试读取一次。
+
+  - 如果读取失败，在最终放弃之前尝试所有其他可读的 [] 子卷。可读 [] 元素由 afr_inode_refresh() 根据脏和挂起标志设置。
+
+  - 如果文件在后端的裂脑中，则 afr_inode_refresh() 将保持生成为 0，并且所有元素的 readable [] 将设置为 0。因此读取总是失败。
+*/
 
 int
 afr_read_txn (call_frame_t *frame, xlator_t *this, inode_t *inode,

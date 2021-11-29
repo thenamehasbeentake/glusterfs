@@ -381,6 +381,7 @@ typedef enum {
 } afr_fop_lock_state_t;
 
 typedef struct _afr_inode_ctx {
+        // read_subvol是个啥， metadatamap， datamap， event
         uint64_t        read_subvol;
         uint64_t        write_subvol;
         int             lock_count;

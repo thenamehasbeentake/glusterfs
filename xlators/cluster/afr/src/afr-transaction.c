@@ -706,6 +706,7 @@ afr_handle_symmetric_errors (call_frame_t *frame, xlator_t *this)
 		__mark_all_success (frame, this);
 }
 
+// 执行fop的subvol是否符合仲裁的要求
 gf_boolean_t
 afr_has_quorum (unsigned char *subvols, xlator_t *this)
 {
@@ -744,6 +745,16 @@ afr_has_quorum (unsigned char *subvols, xlator_t *this)
                  * unlikely to be seen in practice, we might as well use the
                  * "special" quorum then as well.
                  */
+                /*
+                具有偶数个节点的自动仲裁的特殊情况。偶数 N 的副本集在失去“vanilla”quorum 之前只能处理与奇数 N-1 相同数量的失败，并且更多同时失败的概率实际上更高。
+                例如，如果有 1% 的失败几率，当 N=3 时，我们有 0.03% 的几率同时发生两次失败，而当 N=4 时，我们有 0.06% 的几率。然而，N=2 的特殊情况是必要的，因为在这种情况下没有真正的法定人数（即通常不能在*任何*失败中幸存下来）。
+                在这种情况下，我们将第一个节点视为决胜局，允许在某些情况下保留仲裁，同时仍然遵守最重要的约束，即不能同时存在两个分区的节点集，每个节点都认为它们具有仲裁。
+                在两个相同大小的集合中，没有第一个节点的那个将丢失。事实证明，特殊情况也有利于更高的 N 值。
+                继续上面的例子，在 N=4 和这种类型的法定人数下失去法定人数的概率（非常）略低于 N=3 和普通法定人数。随着 N 的增加，差异变得更加明显。
+                因此，即使在实践中不太可能看到这样的副本计数，我们也不妨使用“特殊”仲裁。 
+
+                 简单说就是如果4副本按照3副本来应对失败，即2个brickdown掉就算是失败，这样与预想的不符合(对了个副本却有更小的容错)，所以这里采用独特的方式应对，偶数副本达到一半失败，看subvol[0]是否存在(看运气?)
+                */
                 if ((up_children_count * 2) == priv->child_count) {
                         return subvols[0];
                 }
